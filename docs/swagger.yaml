@@ -1,3 +1,4 @@
+basePath: /
 definitions:
   models.ChatRequest:
     properties:
@@ -16,9 +17,31 @@ definitions:
       response:
         type: string
     type: object
+host: localhost:8080
 info:
-  contact: {}
+  contact:
+    name: API Support
+    url: https://github.com/Izzetee/PiPiMink
+  description: An intelligent router for AI language model requests
+  license:
+    name: Apache 2.0 with Commons Clause
+  title: PiPiMink API
+  version: "1.0"
 paths:
+  /admin:
+    get:
+      description: Serves the admin web interface for model discovery, tagging, and
+        benchmarking.
+      produces:
+      - text/html
+      responses:
+        "200":
+          description: HTML page
+          schema:
+            type: string
+      summary: Admin UI
+      tags:
+      - admin
   /benchmarks/leaderboard:
     get:
       description: Returns all models with benchmark scores, sorted by average score
@@ -116,6 +139,52 @@ paths:
       summary: Get model benchmark scores
       tags:
       - models
+  /models/{name}/enable:
+    patch:
+      consumes:
+      - application/json
+      description: Sets the enabled flag for a model. Requires admin API key.
+      parameters:
+      - description: Model name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Admin API Key
+        in: header
+        name: X-API-Key
+        required: true
+        type: string
+      - description: '{\'
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Enable or disable a model
+      tags:
+      - models
+      - admin
   /models/benchmark:
     post:
       description: 'Runs capability benchmarks against enabled models. Optional query
@@ -154,6 +223,75 @@ paths:
               type: string
             type: object
       summary: Run model benchmarks
+      tags:
+      - models
+      - admin
+  /models/discover:
+    post:
+      description: Queries each configured provider for its model list and registers
+        any new models (no tagging).
+      parameters:
+      - description: Admin API Key
+        in: header
+        name: X-API-Key
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Discover models from all providers
+      tags:
+      - models
+      - admin
+  /models/tag:
+    post:
+      consumes:
+      - application/json
+      description: Runs the capability self-assessment (interview) for each supplied
+        model and persists the tags.
+      parameters:
+      - description: Admin API Key
+        in: header
+        name: X-API-Key
+        required: true
+        type: string
+      - description: 'List of models to tag: {\'
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Tag selected models
       tags:
       - models
       - admin
