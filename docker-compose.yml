@@ -1,0 +1,77 @@
+# This file has been split into separate files:
+# - docker-compose-db.yml: For database and pgAdmin (persistent services)
+# - docker-compose-app.yml: For the application service
+
+# Please use the following commands:
+# 1. Start the database: docker compose -f docker-compose-db.yml up -d
+# 2. Start the application: docker compose -f docker-compose-app.yml up -d
+
+# 
+# Or use the helper script: ./scripts/start-stack.sh
+
+services:
+  db:
+    container_name: pipimink-postgres
+    image: postgres:16
+    restart: always
+    environment:
+      # ⚠️  DEVELOPMENT DEFAULTS — change these for any networked or production deployment.
+      # Pass real values via environment variables or Docker secrets instead of hardcoding them.
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: mydatabase
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - pipimink-network
+
+  pgadmin:
+    container_name: pipimink-pgadmin
+    hostname: postgres-pgadmin
+    image: dpage/pgadmin4:latest
+    environment:
+      # ⚠️  DEVELOPMENT DEFAULTS — never expose pgAdmin to the public internet with these credentials.
+      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    restart: always
+    networks:
+      - pipimink-network
+    depends_on:
+      - db
+
+  app:
+    container_name: pipimink-app
+    build: .
+    env_file:
+      - .env
+    depends_on:
+      - db
+    environment:
+      # ⚠️  Must match the POSTGRES_USER / POSTGRES_PASSWORD values above.
+      DATABASE_URL: postgres://user:password@pipimink-postgres:5432/mydatabase?sslmode=disable
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./providers.json:/app/providers.json:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - pipimink-network
+    command: ["./pipimink"]
+
+networks:
+  pipimink-network:
+    name: pipimink-network
+    driver: bridge
+
+volumes:
+  pgdata:
+    name: pipimink-postgres-data
+  pgadmin_data:
+    name: pipimink-pgadmin-data

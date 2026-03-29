@@ -1,0 +1,46 @@
+services:
+  db:
+    container_name: pipimink-postgres
+    image: postgres:16
+    restart: always
+    environment:
+      # ⚠️  DEVELOPMENT DEFAULTS — change these for any networked or production deployment.
+      # Pass real values via environment variables or Docker secrets instead of hardcoding them.
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: mydatabase
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - pipimink-network
+
+  pgadmin:
+    container_name: pipimink-pgadmin
+    hostname: postgres-pgadmin
+    image: dpage/pgadmin4:latest
+    environment:
+      # ⚠️  DEVELOPMENT DEFAULTS — never expose pgAdmin to the public internet with these credentials.
+      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    restart: always
+    networks:
+      - pipimink-network
+    depends_on:
+      - db
+
+networks:
+  pipimink-network:
+    name: pipimink-network
+    driver: bridge
+
+volumes:
+  pgdata:
+    name: pipimink-postgres-data
+  pgadmin_data:
+    name: pipimink-pgadmin-data

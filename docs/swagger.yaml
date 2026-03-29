@@ -1,0 +1,241 @@
+definitions:
+  models.ChatRequest:
+    properties:
+      message:
+        type: string
+      messages:
+        items:
+          additionalProperties: true
+          type: object
+        type: array
+    type: object
+  models.ChatResponse:
+    properties:
+      model:
+        type: string
+      response:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /benchmarks/leaderboard:
+    get:
+      description: Returns all models with benchmark scores, sorted by average score
+        descending. Optional ?category filter.
+      parameters:
+      - description: Filter by category
+        in: query
+        name: category
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Benchmark leaderboard
+      tags:
+      - models
+  /chat:
+    post:
+      consumes:
+      - application/json
+      description: Routes the chat request to the most appropriate AI model based
+        on message content
+      parameters:
+      - description: Chat request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.ChatRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ChatResponse'
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Process a chat request
+      tags:
+      - chat
+  /models:
+    get:
+      description: Returns a list of all available models
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List available models
+      tags:
+      - models
+  /models/{name}/benchmarks:
+    get:
+      description: Returns average benchmark scores per category for the specified
+        model.
+      parameters:
+      - description: Model name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Provider source (required when multiple providers have the same
+          model name)
+        in: query
+        name: source
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Model not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get model benchmark scores
+      tags:
+      - models
+  /models/benchmark:
+    post:
+      description: 'Runs capability benchmarks against enabled models. Optional query
+        params: model, category.'
+      parameters:
+      - description: Admin API Key
+        in: header
+        name: X-API-Key
+        required: true
+        type: string
+      - description: Run only for this model name
+        in: query
+        name: model
+        type: string
+      - description: Run only tasks in this category (coding|reasoning|instruction-following|creative-writing|summarization|factual-qa)
+        in: query
+        name: category
+        type: string
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Benchmarks disabled
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Run model benchmarks
+      tags:
+      - models
+      - admin
+  /models/update:
+    post:
+      consumes:
+      - application/json
+      description: Triggers an update of model information from all configured sources
+      parameters:
+      - description: Admin API Key
+        in: header
+        name: X-API-Key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update model information
+      tags:
+      - models
+      - admin
+  /v1/chat/completions:
+    post:
+      consumes:
+      - application/json
+      description: OpenAI-compatible endpoint for chat completions
+      parameters:
+      - description: OpenAI-compatible chat request
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: OpenAI-compatible chat completions
+      tags:
+      - openai
+      - chat
+  /v1/models:
+    get:
+      description: OpenAI-compatible endpoint for listing available models
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: OpenAI-compatible models listing
+      tags:
+      - openai
+      - models
+swagger: "2.0"

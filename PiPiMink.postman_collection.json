@@ -1,0 +1,185 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-g7h8-i9j0-k1l2m3n4o5p6",
+    "name": "PiPiMink",
+    "description": "Collection for testing the PiPiMink API. Routing is always based on the last user message; the full conversation history is forwarded to the chosen model.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Single-turn — Quantum Computing",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"message\": \"Explain quantum computing principles and their application in cryptography, with code examples in Python\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/chat",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["chat"]
+        },
+        "description": "Single-turn request. PiPiMink picks the best model based on the prompt."
+      },
+      "response": []
+    },
+    {
+      "name": "Single-turn — Binary Search Tree",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"message\": \"How do I implement a binary search tree in Go?\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/chat",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["chat"]
+        },
+        "description": "Technical question about implementing a data structure."
+      },
+      "response": []
+    },
+    {
+      "name": "Single-turn — Creative Writing",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"message\": \"Write a short poem about artificial intelligence\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/chat",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["chat"]
+        },
+        "description": "Creative writing task to test language capabilities."
+      },
+      "response": []
+    },
+    {
+      "name": "Single-turn — Mathematics",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"message\": \"Solve the differential equation dy/dx = 2xy with the initial condition y(0) = 1\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/chat",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["chat"]
+        },
+        "description": "Mathematical problem solving to test analytical capabilities."
+      },
+      "response": []
+    },
+    {
+      "name": "Multi-turn — Conversation History (native /chat)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"messages\": [\n        {\"role\": \"user\",      \"content\": \"How do I implement a binary search tree in Go?\"},\n        {\"role\": \"assistant\", \"content\": \"A binary search tree in Go uses a Node struct with a value and left/right child pointers...\"},\n        {\"role\": \"user\",      \"content\": \"Can you now show me how to add a delete operation to that implementation?\"}\n    ]\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/chat",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["chat"]
+        },
+        "description": "Multi-turn request using the native /chat endpoint. Routing is decided on the last user message; the full history is sent to the chosen model."
+      },
+      "response": []
+    },
+    {
+      "name": "Multi-turn — Conversation History (OpenAI-compatible)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"model\": \"gpt-4-turbo\",\n    \"messages\": [\n        {\"role\": \"user\",      \"content\": \"What is the difference between a mutex and a semaphore?\"},\n        {\"role\": \"assistant\", \"content\": \"A mutex provides mutual exclusion for a single resource, while a semaphore controls access to a pool of resources...\"},\n        {\"role\": \"user\",      \"content\": \"Give me a concrete Go example showing both.\"}\n    ]\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/v1/chat/completions",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["v1", "chat", "completions"]
+        },
+        "description": "Multi-turn request via the OpenAI-compatible endpoint. The model field is respected if the model exists in the registry; otherwise PiPiMink routes automatically."
+      },
+      "response": []
+    },
+    {
+      "name": "Multi-turn — With System Prompt",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"messages\": [\n        {\"role\": \"system\",    \"content\": \"You are a senior Go engineer. Be concise and precise.\"},\n        {\"role\": \"user\",      \"content\": \"What are goroutines?\"},\n        {\"role\": \"assistant\", \"content\": \"Goroutines are lightweight threads managed by the Go runtime...\"},\n        {\"role\": \"user\",      \"content\": \"How do channels relate to goroutines?\"}\n    ]\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/chat",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["chat"]
+        },
+        "description": "Conversation history including a system prompt. The full history including the system message is forwarded to the chosen model."
+      },
+      "response": []
+    },
+    {
+      "name": "List Models",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8080/models",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["models"]
+        },
+        "description": "Returns all models in the registry with their enabled status and capability tags."
+      },
+      "response": []
+    },
+    {
+      "name": "Update Models (admin)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-API-Key", "value": "{{ADMIN_API_KEY}}" }
+        ],
+        "url": {
+          "raw": "http://localhost:8080/models/update",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["models", "update"]
+        },
+        "description": "Triggers a full model refresh: queries all providers, collects self-reported capability tags, and updates PostgreSQL. Requires X-API-Key header matching ADMIN_API_KEY."
+      },
+      "response": []
+    }
+  ]
+}

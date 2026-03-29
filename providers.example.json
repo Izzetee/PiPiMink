@@ -1,0 +1,87 @@
+[
+  {
+    "name": "openai",
+    "type": "openai-compatible",
+    "base_url": "https://api.openai.com",
+    "api_key_env": "OPENAI_API_KEY",
+    "timeout": "2m",
+    "models": []
+  },
+  {
+    "name": "anthropic",
+    "type": "anthropic",
+    "base_url": "https://api.anthropic.com",
+    "api_key_env": "ANTHROPIC_API_KEY",
+    "timeout": "2m",
+    "models": ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"]
+  },
+  {
+    "name": "gemini",
+    "type": "openai-compatible",
+    "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+    "api_key_env": "GEMINI_API_KEY",
+    "timeout": "2m",
+    "models": []
+  },
+  {
+    "name": "openrouter",
+    "type": "openai-compatible",
+    "base_url": "https://openrouter.ai/api",
+    "api_key_env": "OPENROUTER_API_KEY",
+    "timeout": "2m",
+    "models": []
+  },
+  {
+    "name": "local",
+    "type": "openai-compatible",
+    "base_url": "http://localhost:11434",
+    "api_key_env": "",
+    "timeout": "5m",
+    "rate_limit_seconds": 10,
+    "models": []
+  },
+  {
+    "name": "az-gpt4o",
+    "type": "openai-compatible",
+    "base_url": "https://YOUR-DEPLOYMENT.openai.azure.com",
+    "api_key_env": "AZURE_GPT4O_API_KEY",
+    "timeout": "2m",
+    "models": ["gpt-4o"]
+  },
+
+  {
+    "name": "az-foundry",
+    "type": "openai-compatible",
+    "base_url": "https://YOUR-FOUNDRY-RESOURCE.services.ai.azure.com",
+    "timeout": "3m",
+    "api_key_env": "",
+    "model_configs": [
+      {
+        "name": "Mistral-large-3",
+        "chat_path": "/models/chat/completions?api-version=2024-05-01-preview",
+        "api_key_env": "AZURE_FOUNDRY_MISTRAL_LARGE_API_KEY"
+      },
+      {
+        "name": "Phi-4",
+        "chat_path": "/models/chat/completions?api-version=2024-05-01-preview",
+        "api_key_env": "AZURE_FOUNDRY_PHI4_API_KEY"
+      },
+      {
+        "name": "Llama-3.3-70B-Instruct",
+        "chat_path": "/models/chat/completions?api-version=2024-05-01-preview",
+        "api_key_env": "AZURE_FOUNDRY_LLAMA_API_KEY"
+      },
+      {
+        "name": "claude-opus-4-5",
+        "type": "anthropic",
+        "base_url": "https://YOUR-FOUNDRY-RESOURCE.services.ai.azure.com/anthropic",
+        "api_key_env": "AZURE_FOUNDRY_CLAUDE_OPUS_API_KEY"
+      },
+      {
+        "name": "gpt-4o",
+        "chat_path": "/api/projects/YOUR-PROJECT-NAME/openai/v1/chat/completions",
+        "api_key_env": "AZURE_FOUNDRY_GPT4O_API_KEY"
+      }
+    ]
+  }
+]

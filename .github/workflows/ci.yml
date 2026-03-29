@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Quality And Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify no legacy model references
+        run: |
+          if git grep -nE "gpt-3\\.5-turbo|gpt-3\\.5|gpt-4o-mini" -- \
+            ':!README.md' \
+            ':!.github/workflows/*.yml' \
+            ':!scripts/release-check.sh'; then
+            echo "Legacy model references found. Use gpt-4-turbo as baseline."
+            exit 1
+          fi
+
+      - name: Verify formatting
+        run: |
+          UNFORMATTED=$(gofmt -l .)
+          if [ -n "$UNFORMATTED" ]; then
+            echo "Unformatted files detected:"
+            echo "$UNFORMATTED"
+            exit 1
+          fi
+
+      - name: Verify go.mod/go.sum are tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+  markdown:
+    name: Markdown Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Lint markdown
+        uses: DavidAnson/markdownlint-cli2-action@v22
+        with:
+          globs: |
+            **/*.md
+            #*.md
