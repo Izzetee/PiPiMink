@@ -2,6 +2,9 @@
 
 set -e
 
+# Always run from the project root, regardless of where the script is invoked from
+cd "$(dirname "$0")/.."
+
 if docker compose version >/dev/null 2>&1; then
 	COMPOSE_CMD="docker compose"
 elif command -v docker-compose >/dev/null 2>&1; then
