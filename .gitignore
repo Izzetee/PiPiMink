@@ -12,6 +12,7 @@
 # Environment and configuration files
 .env
 .env.local
+providers.json
 *.config
 
 # IDE and editor specific files
