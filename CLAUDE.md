@@ -153,6 +153,10 @@ go test -cover ./...   # with coverage
 - Provider base URLs and timeouts come from `providers.json`, not env vars — check that file first when debugging connectivity.
 - Ollama-compatible endpoints intentionally advertise a single model named `PiPiMink v1` to clients, regardless of what models are loaded.
 
+## License
+
+Apache 2.0 with Commons Clause. See `LICENSE` for details. Repository: `github.com/Izzetee/PiPiMink`.
+
 ## What NOT to assume
 
 - PiPiMink does not optimize for cost. Do not add cost-related routing logic unless explicitly asked.
