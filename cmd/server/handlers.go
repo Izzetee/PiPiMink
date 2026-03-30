@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -602,7 +603,7 @@ func (s *Server) handleRunBenchmarks(w http.ResponseWriter, r *http.Request) {
 // @Router /models/{name}/benchmarks [get]
 func (s *Server) handleGetModelBenchmarks(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	modelName := vars["name"]
+	modelName, _ := url.PathUnescape(vars["name"])
 
 	// Resolve source: prefer query param, fall back to model collection.
 	source := r.URL.Query().Get("source")
@@ -737,7 +738,7 @@ func (s *Server) handleSetModelEnabled(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name := mux.Vars(r)["name"]
+	name, _ := url.PathUnescape(mux.Vars(r)["name"])
 	var body struct {
 		Source  string `json:"source"`
 		Enabled bool   `json:"enabled"`

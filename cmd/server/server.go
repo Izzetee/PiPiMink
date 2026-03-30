@@ -38,7 +38,7 @@ func NewServer(cfg *config.Config, db DatabaseInterface, llmClient LLMInterface)
 		config:          cfg,
 		db:              db,
 		llmClient:       llmClient,
-		router:          mux.NewRouter(),
+		router:          mux.NewRouter().UseEncodedPath(),
 		modelCollection: models.NewModelCollection(),
 		httpMetrics:     newHTTPMetrics(),
 	}
