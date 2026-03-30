@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/Izzetee/PiPiMink/actions/workflows/ci.yml"><img src="https://github.com/Izzetee/PiPiMink/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/Izzetee/PiPiMink/actions/workflows/security.yml"><img src="https://github.com/Izzetee/PiPiMink/actions/workflows/security.yml/badge.svg" alt="Security"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0%20%2B%20Commons%20Clause-blue" alt="License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="License"></a>
 </p>
 
 PiPiMink is a Go service that routes each prompt to the LLM most likely to produce the best response — **for you specifically**.
@@ -175,4 +175,8 @@ This project was developed with the assistance of AI coding tools. Contributions
 
 ## License
 
-Apache 2.0 with [Commons Clause](LICENSE). Free to use, modify, and self-host. Commercial reselling requires prior permission — see the [LICENSE](LICENSE) for details.
+PiPiMink is open source software licensed under the [Apache License 2.0](LICENSE). You are free to use, modify, and redistribute the code under the terms of that license.
+
+The project name "PiPiMink", logo, and official branding are governed by a separate [trademark policy](TRADEMARKS.md) and are not covered by the Apache-2.0 license.
+
+See also: [NOTICE](NOTICE) | [CONTRIBUTING.md](CONTRIBUTING.md) | [TRADEMARKS.md](TRADEMARKS.md)

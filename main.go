@@ -17,7 +17,8 @@ import (
 // @description An intelligent router for AI language model requests
 // @contact.name API Support
 // @contact.url https://github.com/Izzetee/PiPiMink
-// @license.name Apache 2.0 with Commons Clause
+// @license.name Apache-2.0
+// @license.url https://www.apache.org/licenses/LICENSE-2.0
 // @host localhost:8080
 // @BasePath /
 
