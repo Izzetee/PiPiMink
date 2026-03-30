@@ -14,7 +14,8 @@ const docTemplate = `{
             "url": "https://github.com/Izzetee/PiPiMink"
         },
         "license": {
-            "name": "Apache 2.0 with Commons Clause"
+            "name": "Apache-2.0",
+            "url": "https://www.apache.org/licenses/LICENSE-2.0"
         },
         "version": "{{.Version}}"
     },

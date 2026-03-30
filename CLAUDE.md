@@ -155,7 +155,7 @@ go test -cover ./...   # with coverage
 
 ## License
 
-Apache 2.0 with Commons Clause. See `LICENSE` for details. Repository: `github.com/Izzetee/PiPiMink`.
+Apache License 2.0. See `LICENSE` for the full text, `NOTICE` for attribution, and `TRADEMARKS.md` for the trademark policy. Repository: `github.com/Izzetee/PiPiMink`.
 
 ## What NOT to assume
 
