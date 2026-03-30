@@ -4,6 +4,7 @@ Thank you for your interest in contributing! This document explains how to get s
 
 ## Table of Contents
 
+- [License](#license)
 - [AI-Assisted Development](#ai-assisted-development)
 - [Getting Started](#getting-started)
 - [Development Setup](#development-setup)
@@ -13,6 +14,16 @@ Thank you for your interest in contributing! This document explains how to get s
 - [Code Style](#code-style)
 - [Tests](#tests)
 - [Swagger / OpenAPI Docs](#swagger--openapi-docs)
+
+---
+
+## License
+
+By intentionally submitting a contribution for inclusion in PiPiMink — whether via pull request, patch, or any other mechanism — you agree that your contribution will be licensed under the [Apache License 2.0](LICENSE), the same license that covers the project, unless you explicitly state otherwise.
+
+You retain copyright to your own contributions. No separate Contributor License Agreement (CLA) is required.
+
+> **Optional note for future consideration:** The project may adopt [Developer Certificate of Origin (DCO)](https://developercertificate.org/) sign-off (`git commit -s`) in the future to formalize contribution provenance. This is not currently required.
 
 ---
 
@@ -41,7 +52,7 @@ This project was built with the help of AI coding tools (Claude Code, GitHub Cop
 
 **Prerequisites:**
 
-- Go 1.22+
+- Go 1.25+
 - Docker & Docker Compose
 - A PostgreSQL instance (or use the provided compose stack)
 

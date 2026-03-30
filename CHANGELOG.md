@@ -99,4 +99,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `providers.json` configuration with `providers.example.json` template
 - Docker Compose stack (`docker-compose.yml`, `docker-compose-db.yml`, `docker-compose-app.yml`)
 - Helper scripts in `scripts/`: `start-stack.sh`, `update_models.sh`, `test_chat_request.sh`, `generate-swagger.sh`
-- Apache 2.0 License with Commons Clause
+- Apache License 2.0
