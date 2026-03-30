@@ -238,7 +238,7 @@ func loadProviders(dir string) []ProviderConfig {
 		if p.APIKeyEnv != "" {
 			p.APIKey = os.Getenv(p.APIKeyEnv)
 			if p.APIKey == "" {
-				log.Printf("Warning: provider %q references env var %q which is not set", p.Name, p.APIKeyEnv)
+				log.Printf("Warning: provider %q: API key not set (check env configuration)", p.Name)
 			}
 		}
 
@@ -248,7 +248,7 @@ func loadProviders(dir string) []ProviderConfig {
 			if mc.APIKeyEnv != "" {
 				mc.APIKey = os.Getenv(mc.APIKeyEnv)
 				if mc.APIKey == "" {
-					log.Printf("Warning: provider %q model %q references env var %q which is not set", p.Name, mc.Name, mc.APIKeyEnv)
+					log.Printf("Warning: provider %q model %q: API key not set (check env configuration)", p.Name, mc.Name)
 				}
 			}
 		}
