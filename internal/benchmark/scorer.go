@@ -8,25 +8,25 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
+
+	"PiPiMink/internal/config"
 )
 
 // Scorer evaluates model responses. Deterministic and format-check tasks are scored locally;
 // LLM-judge tasks are sent to a configurable judge model.
 type Scorer struct {
-	judgeBaseURL string
-	judgeAPIKey  string
-	judgeModel   string
-	httpClient   *http.Client
+	judgeProvider config.ProviderConfig // resolved provider config (with per-model overrides applied)
+	judgeModel    string
+	httpClient    *http.Client
 }
 
 // NewScorer creates a scorer backed by the given judge model endpoint.
-func NewScorer(judgeBaseURL, judgeAPIKey, judgeModel string, timeout time.Duration) *Scorer {
+// The provider config should already have per-model overrides applied via ForModel().
+func NewScorer(judgeProvider config.ProviderConfig, judgeModel string) *Scorer {
 	return &Scorer{
-		judgeBaseURL: judgeBaseURL,
-		judgeAPIKey:  judgeAPIKey,
-		judgeModel:   judgeModel,
-		httpClient:   &http.Client{Timeout: timeout},
+		judgeProvider: judgeProvider,
+		judgeModel:    judgeModel,
+		httpClient:    &http.Client{Timeout: judgeProvider.Timeout},
 	}
 }
 
@@ -61,7 +61,7 @@ func (s *Scorer) scoreDeterministic(expected, response string) float64 {
 // scale. The final score is the average of all criterion scores, normalised to [0.0, 1.0].
 // Returns 0.0 on any error.
 func (s *Scorer) scoreLLMJudge(ctx context.Context, task Task, response string) float64 {
-	if s.judgeBaseURL == "" || s.judgeModel == "" {
+	if s.judgeProvider.BaseURL == "" || s.judgeModel == "" {
 		log.Printf("benchmark: judge not configured, skipping LLM judge for task %s", task.ID)
 		return 0.0
 	}
@@ -92,30 +92,38 @@ func (s *Scorer) scoreLLMJudge(ctx context.Context, task Task, response string) 
 		task.Prompt, response, criteriaText,
 	)
 
-	payload := map[string]interface{}{
-		"model":       s.judgeModel,
-		"temperature": 0.0,
-		"messages": []map[string]string{
-			{"role": "system", "content": systemMsg},
-			{"role": "user", "content": userMsg},
-		},
-	}
+	var body []byte
+	var url string
+	var err error
 
-	body, err := json.Marshal(payload)
+	switch s.judgeProvider.Type {
+	case config.ProviderTypeAnthropic:
+		body, url, err = s.buildAnthropicRequest(systemMsg, userMsg)
+	default:
+		body, url, err = s.buildOpenAIRequest(systemMsg, userMsg)
+	}
 	if err != nil {
 		log.Printf("benchmark: judge marshal error for task %s: %v", task.ID, err)
 		return 0.0
 	}
 
-	url := s.judgeBaseURL + "/v1/chat/completions"
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
 	if err != nil {
 		log.Printf("benchmark: judge request creation error for task %s: %v", task.ID, err)
 		return 0.0
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if s.judgeAPIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+s.judgeAPIKey)
+
+	switch s.judgeProvider.Type {
+	case config.ProviderTypeAnthropic:
+		if s.judgeProvider.APIKey != "" {
+			req.Header.Set("x-api-key", s.judgeProvider.APIKey)
+		}
+		req.Header.Set("anthropic-version", "2023-06-01")
+	default:
+		if s.judgeProvider.APIKey != "" {
+			req.Header.Set("Authorization", "Bearer "+s.judgeProvider.APIKey)
+		}
 	}
 
 	resp, err := s.httpClient.Do(req)
@@ -131,20 +139,14 @@ func (s *Scorer) scoreLLMJudge(ctx context.Context, task Task, response string) 
 		return 0.0
 	}
 
-	// Extract the content from the OpenAI-format response.
-	var apiResp struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if err := json.Unmarshal(buf.Bytes(), &apiResp); err != nil || len(apiResp.Choices) == 0 {
-		log.Printf("benchmark: judge response parse error for task %s: %v (body: %s)", task.ID, err, buf.String())
+	log.Printf("benchmark: judge response status=%d body=%s", resp.StatusCode, buf.String())
+
+	// Extract text content from the response based on provider type.
+	content, err := s.extractJudgeContent(buf.Bytes())
+	if err != nil {
+		log.Printf("benchmark: judge response parse error for task %s: %v", task.ID, err)
 		return 0.0
 	}
-
-	content := apiResp.Choices[0].Message.Content
 
 	// Extract the JSON object from the content (the judge may add surrounding text).
 	start := strings.Index(content, "{")
@@ -180,6 +182,85 @@ func (s *Scorer) scoreLLMJudge(ctx context.Context, task Task, response string) 
 	normalised := (sum / float64(len(judgeResult.Scores))) / 10.0
 	log.Printf("benchmark: judge scores %v (avg=%.2f) for task %s — %s", judgeResult.Scores, normalised, task.ID, judgeResult.Reason)
 	return normalised
+}
+
+// buildOpenAIRequest builds the JSON payload and URL for an OpenAI-compatible judge request.
+func (s *Scorer) buildOpenAIRequest(systemMsg, userMsg string) ([]byte, string, error) {
+	payload := map[string]interface{}{
+		"model":       s.judgeModel,
+		"temperature": 0.0,
+		"messages": []map[string]string{
+			{"role": "system", "content": systemMsg},
+			{"role": "user", "content": userMsg},
+		},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, "", err
+	}
+	return body, s.judgeProvider.ChatCompletionsURL(), nil
+}
+
+// buildAnthropicRequest builds the JSON payload and URL for an Anthropic Messages API judge request.
+func (s *Scorer) buildAnthropicRequest(systemMsg, userMsg string) ([]byte, string, error) {
+	payload := map[string]interface{}{
+		"model":      s.judgeModel,
+		"max_tokens": 4096,
+		"system":     systemMsg,
+		"messages": []map[string]string{
+			{"role": "user", "content": userMsg},
+		},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, "", err
+	}
+	return body, s.judgeProvider.BaseURL + "/v1/messages", nil
+}
+
+// extractJudgeContent extracts the text content from a judge API response,
+// handling both OpenAI and Anthropic response formats.
+func (s *Scorer) extractJudgeContent(body []byte) (string, error) {
+	switch s.judgeProvider.Type {
+	case config.ProviderTypeAnthropic:
+		return extractAnthropicContent(body)
+	default:
+		return extractOpenAIContent(body)
+	}
+}
+
+// extractOpenAIContent extracts text from an OpenAI-compatible chat completions response.
+func extractOpenAIContent(body []byte) (string, error) {
+	var apiResp struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(body, &apiResp); err != nil {
+		return "", fmt.Errorf("error decoding OpenAI response: %w", err)
+	}
+	if len(apiResp.Choices) == 0 {
+		return "", fmt.Errorf("missing or empty choices in OpenAI response")
+	}
+	return apiResp.Choices[0].Message.Content, nil
+}
+
+// extractAnthropicContent extracts text from an Anthropic Messages API response.
+func extractAnthropicContent(body []byte) (string, error) {
+	var result struct {
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", fmt.Errorf("error decoding Anthropic response: %w", err)
+	}
+	if len(result.Content) == 0 {
+		return "", fmt.Errorf("missing or empty content in Anthropic response")
+	}
+	return result.Content[0].Text, nil
 }
 
 func min(a, b float64) float64 {

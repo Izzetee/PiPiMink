@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"sync"
-	"time"
 
 	"PiPiMink/internal/config"
 	"PiPiMink/internal/models"
@@ -34,21 +33,22 @@ func (s *Suite) WithTasks(tasks []Task) *Suite {
 }
 
 // NewSuite creates a Suite wired to the given database, config, and chat function.
-// judgeBaseURL/judgeAPIKey/judgeModel define the model used to score LLM-judge tasks.
-// If judgeModel is empty the suite falls back to the configured MODEL_SELECTION_MODEL.
+// The judge provider and model are resolved from BENCHMARK_JUDGE_PROVIDER/MODEL config,
+// falling back to MODEL_SELECTION_PROVIDER/MODEL. Per-model overrides are applied.
 func NewSuite(db DB, cfg *config.Config, chatFn ChatFunc) *Suite {
-	judgeBaseURL, judgeAPIKey, judgeModel := resolveJudge(cfg)
+	judgeProvider, judgeModel := resolveJudge(cfg)
 	return &Suite{
 		db:     db,
 		cfg:    cfg,
-		scorer: NewScorer(judgeBaseURL, judgeAPIKey, judgeModel, 2*time.Minute),
+		scorer: NewScorer(judgeProvider, judgeModel),
 		chatFn: chatFn,
 	}
 }
 
-// resolveJudge returns the base URL, API key, and model name for the LLM judge.
+// resolveJudge returns the resolved provider config and model name for the LLM judge.
 // It uses BENCHMARK_JUDGE_PROVIDER/MODEL if set, otherwise falls back to the selection provider.
-func resolveJudge(cfg *config.Config) (baseURL, apiKey, model string) {
+// Per-model overrides (base_url, api_key, type, chat_path) are applied via ForModel().
+func resolveJudge(cfg *config.Config) (config.ProviderConfig, string) {
 	judgeProviderName := cfg.BenchmarkJudgeProvider
 	if judgeProviderName == "" {
 		judgeProviderName = cfg.ModelSelectionProvider
@@ -60,10 +60,10 @@ func resolveJudge(cfg *config.Config) (baseURL, apiKey, model string) {
 
 	for _, p := range cfg.Providers {
 		if p.Name == judgeProviderName {
-			return p.BaseURL, p.APIKey, judgeModel
+			return p.ForModel(judgeModel), judgeModel
 		}
 	}
-	return "", "", judgeModel
+	return config.ProviderConfig{}, judgeModel
 }
 
 // Run executes benchmarks for all provided enabled models.
