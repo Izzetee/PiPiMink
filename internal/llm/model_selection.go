@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"PiPiMink/internal/config"
 	"PiPiMink/internal/models"
 )
 
@@ -30,14 +31,14 @@ func (c *Client) fallbackModel() string {
 	return c.selectionModel()
 }
 
-// selectionProviderURL returns the base URL and API key for the provider used
-// to make routing decisions (the meta-router).
-func (c *Client) selectionProviderCredentials() (baseURL, apiKey string) {
-	if p, ok := c.selectionProvider(); ok {
-		return p.BaseURL, p.APIKey
+// resolvedSelectionProvider returns the ProviderConfig for the meta-router
+// with per-model overrides applied (base_url, api_key, type, chat_path).
+func (c *Client) resolvedSelectionProvider() (config.ProviderConfig, bool) {
+	p, ok := c.selectionProvider()
+	if !ok {
+		return p, false
 	}
-	// Hard fallback — should not normally be reached.
-	return "https://api.openai.com", ""
+	return p.ForModel(c.selectionModel()), true
 }
 
 // DecideModelBasedOnCapabilities analyzes a message and determines the best model to use
@@ -75,17 +76,12 @@ func (c *Client) DecideModelBasedOnCapabilities(message string, availableModels 
 	log.Printf("Starting model decision process for message: %.100s...", message)
 	log.Printf("Available models count: %d", len(availableModels))
 
-	// Use the configured selection provider for routing decisions.
-	_, selAPIKey := c.selectionProviderCredentials()
-	selProvider, hasSP := c.selectionProvider()
-	var selTimeout = 2 * time.Minute
-	url := "https://api.openai.com/v1/chat/completions" // hard fallback, normally overridden below
-	if hasSP {
-		selTimeout = selProvider.Timeout
-		url = selProvider.ChatCompletionsURL()
+	// Use the configured selection provider for routing decisions (with per-model overrides).
+	selProvider, hasSP := c.resolvedSelectionProvider()
+	if !hasSP {
+		return "", fmt.Errorf("no selection provider configured")
 	}
-	apiKey := selAPIKey
-	client := &http.Client{Timeout: selTimeout}
+	client := &http.Client{Timeout: selProvider.Timeout}
 
 	// Prepare model capabilities information
 	hasBenchmarkScores := false
@@ -159,36 +155,58 @@ func (c *Client) DecideModelBasedOnCapabilities(message string, availableModels 
 	// Create the request payload with temperature=0 for consistent responses
 	selectionModel := c.selectionModel()
 	fallbackModel := c.fallbackModel()
-	payload := map[string]interface{}{
-		"model":       selectionModel,
-		"temperature": 0.0, // Set temperature to 0 for consistent responses
-		"messages": []map[string]string{
-			{
-				"role":    "system",
-				"content": systemMessage,
-			},
-			{
-				"role":    "user",
-				"content": message,
-			},
-		},
-	}
 
-	jsonPayload, err := json.Marshal(payload)
+	var jsonPayload []byte
+	var endpoint string
+
+	switch selProvider.Type {
+	case config.ProviderTypeAnthropic:
+		payload := map[string]interface{}{
+			"model":      selectionModel,
+			"max_tokens": 4096,
+			"system":     systemMessage,
+			"messages": []map[string]string{
+				{"role": "user", "content": message},
+			},
+		}
+		jsonPayload, err = json.Marshal(payload)
+		endpoint = selProvider.BaseURL + "/v1/messages"
+	default:
+		payload := map[string]interface{}{
+			"model":       selectionModel,
+			"temperature": 0.0,
+			"messages": []map[string]string{
+				{"role": "system", "content": systemMessage},
+				{"role": "user", "content": message},
+			},
+		}
+		jsonPayload, err = json.Marshal(payload)
+		endpoint = selProvider.ChatCompletionsURL()
+	}
 	if err != nil {
 		return "", fmt.Errorf("error marshalling payload: %w", err)
 	}
 
 	// Create and send the HTTP request
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
+	req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return "", fmt.Errorf("error creating request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
+	switch selProvider.Type {
+	case config.ProviderTypeAnthropic:
+		if selProvider.APIKey != "" {
+			req.Header.Set("x-api-key", selProvider.APIKey)
+		}
+		req.Header.Set("anthropic-version", anthropicVersion)
+	default:
+		if selProvider.APIKey != "" {
+			req.Header.Set("Authorization", "Bearer "+selProvider.APIKey)
+		}
+	}
 
-	log.Printf("Sending model selection request")
+	log.Printf("Sending model selection request to %s (type: %s)", endpoint, selProvider.Type)
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("error making request: %w", err)
@@ -206,43 +224,22 @@ func (c *Client) DecideModelBasedOnCapabilities(message string, availableModels 
 	responseStr := responseBody.String()
 	log.Printf("Raw API response: %s", responseStr)
 
-	// Parse the JSON response
-	var result map[string]interface{}
-	if err := json.Unmarshal(responseBody.Bytes(), &result); err != nil {
-		return "", fmt.Errorf("error decoding response JSON: %w", err)
+	// Extract text content from the response based on provider type.
+	var content string
+	switch selProvider.Type {
+	case config.ProviderTypeAnthropic:
+		content, err = extractAnthropicContent(responseBody.Bytes())
+		if err != nil {
+			return "", fmt.Errorf("error extracting content from Anthropic response: %w", err)
+		}
+	default:
+		content, err = extractOpenAISelectionContent(responseBody.Bytes())
+		if err != nil {
+			return "", err
+		}
 	}
 
-	// Extract model name from response with detailed error checking
-	choices, ok := result["choices"].([]interface{})
-	if !ok {
-		log.Printf("Error: 'choices' field is missing or not an array. Response keys: %v", getMapKeys(result))
-		return "", fmt.Errorf("error extracting choices from response: 'choices' field missing or invalid")
-	}
-
-	if len(choices) == 0 {
-		log.Printf("Error: 'choices' array is empty")
-		return "", fmt.Errorf("error extracting choices from response: 'choices' array is empty")
-	}
-
-	choice, ok := choices[0].(map[string]interface{})
-	if !ok {
-		log.Printf("Error: first choice is not an object. Type: %T", choices[0])
-		return "", fmt.Errorf("error extracting first choice from response")
-	}
-
-	messageObj, ok := choice["message"].(map[string]interface{})
-	if !ok {
-		log.Printf("Error: 'message' field missing or invalid in choice. Choice keys: %v", getMapKeys(choice))
-		return "", fmt.Errorf("error extracting message from response")
-	}
-
-	content, ok := messageObj["content"].(string)
-	if !ok {
-		log.Printf("Error: 'content' field missing or not a string in message. Message keys: %v", getMapKeys(messageObj))
-		return "", fmt.Errorf("error extracting content from message")
-	}
-
-	log.Printf("Extracted model name: '%s'", content)
+	log.Printf("Extracted model selection content: '%s'", content)
 
 	// Extract JSON from the response content
 	jsonStart := strings.Index(content, "{")
@@ -293,6 +290,42 @@ func (c *Client) DecideModelBasedOnCapabilities(message string, availableModels 
 	elapsedTime := time.Since(startTime)
 	log.Printf("Model selection with %s took %v to evaluate the prompt", selectionModel, elapsedTime)
 	return selectedModel, nil
+}
+
+// extractOpenAISelectionContent extracts the text content from an OpenAI-compatible
+// chat completions response, with detailed error logging for debugging.
+func extractOpenAISelectionContent(body []byte) (string, error) {
+	var result map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", fmt.Errorf("error decoding response JSON: %w", err)
+	}
+
+	choices, ok := result["choices"].([]interface{})
+	if !ok {
+		log.Printf("Error: 'choices' field is missing or not an array. Response keys: %v", getMapKeys(result))
+		return "", fmt.Errorf("error extracting choices from response: 'choices' field missing or invalid")
+	}
+	if len(choices) == 0 {
+		return "", fmt.Errorf("error extracting choices from response: 'choices' array is empty")
+	}
+
+	choice, ok := choices[0].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("error extracting first choice from response")
+	}
+
+	messageObj, ok := choice["message"].(map[string]interface{})
+	if !ok {
+		log.Printf("Error: 'message' field missing or invalid in choice. Choice keys: %v", getMapKeys(choice))
+		return "", fmt.Errorf("error extracting message from response")
+	}
+
+	content, ok := messageObj["content"].(string)
+	if !ok {
+		log.Printf("Error: 'content' field missing or not a string in message. Message keys: %v", getMapKeys(messageObj))
+		return "", fmt.Errorf("error extracting content from message")
+	}
+	return content, nil
 }
 
 // DecideModel is a simpler model decision function that returns a default model.
