@@ -11,19 +11,23 @@ import (
 
 // DB is the minimal database interface required by the benchmark suite.
 type DB interface {
-	SaveBenchmarkResult(modelName, source, category, taskID string, score float64, latencyMs int64) error
+	SaveBenchmarkResult(modelName, source, category, taskID string, score float64, latencyMs int64, judgeModel, response string) error
 	GetBenchmarkScores(modelName, source string) (map[string]float64, error)
 	GetAllBenchmarkScores() (map[string]map[string]float64, error)
 }
 
 // Suite orchestrates benchmark runs across all (or a filtered set of) enabled models.
 type Suite struct {
-	db     DB
-	cfg    *config.Config
-	scorer *Scorer
-	chatFn ChatFunc
-	tasks  []Task // if non-nil, overrides AllTasks() for this run
+	db         DB
+	cfg        *config.Config
+	scorer     *Scorer
+	chatFn     ChatFunc
+	tasks      []Task        // if non-nil, overrides AllTasks() for this run
+	OnProgress ProgressFunc  // optional callback fired after each task completes
 }
+
+// JudgeModel returns the name of the LLM judge model configured for this suite.
+func (s *Suite) JudgeModel() string { return s.scorer.judgeModel }
 
 // WithTasks overrides the task list used by this suite. When set, AllTasks() is not called.
 // Use this to inject DB-loaded task configs.
@@ -135,13 +139,13 @@ func (s *Suite) RunForModel(ctx context.Context, modelName string, modelInfo mod
 func (s *Suite) runForModel(ctx context.Context, modelName string, modelInfo models.ModelInfo, tasks []Task) error {
 	log.Printf("benchmark: running %d task(s) for model %s", len(tasks), modelName)
 
-	results := RunModelTasks(ctx, modelName, modelInfo, tasks, s.scorer, s.chatFn)
+	results := RunModelTasks(ctx, modelName, modelInfo, tasks, s.scorer, s.chatFn, s.OnProgress)
 
 	for _, r := range results {
 		if r.Err != nil {
 			continue
 		}
-		if err := s.db.SaveBenchmarkResult(modelName, modelInfo.Source, string(r.Category), r.TaskID, r.Score, r.LatencyMs); err != nil {
+		if err := s.db.SaveBenchmarkResult(modelName, modelInfo.Source, string(r.Category), r.TaskID, r.Score, r.LatencyMs, s.JudgeModel(), r.Response); err != nil {
 			log.Printf("benchmark: error saving result for model=%s task=%s: %v", modelName, r.TaskID, err)
 		}
 	}

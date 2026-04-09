@@ -10,11 +10,70 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- 3-tier authentication model: Public (unauthenticated), User (session or Bearer token), Admin (X-API-Key or admin session)
+  - Centralized auth middleware enforces tiers on all routes — new handlers must not perform inline auth checks
+  - Bearer token support: per-user API tokens for programmatic access (`POST /auth/tokens`, `GET /auth/tokens`, `DELETE /auth/tokens/{id}`)
+  - `REQUIRE_AUTH_FOR_CHAT` config flag: when `true`, chat and API endpoints require User or Admin auth (default: `false` for backward compatibility)
+- User-scoped analytics: routing decisions now track `user_id`; admins see all data, regular users see only their own decisions
+- Removed inline auth checks from 20+ handlers in favor of centralized middleware (`cmd/server/auth_middleware.go`)
+- React console UI replacing the old inline HTML admin pages
+  - Model dashboard with discovery, tagging, benchmarking workflow
+  - Provider management with per-model config editing
+  - Benchmark config and tagging prompt editor
+  - Settings page with global save bar and API key vault
+  - Analytics dashboard with KPI summary, latency charts, and routing decision log
+  - Auth & Users: provider config, user/group management, routing rules, audit log
+- OAuth2/OIDC authentication via Authentik as primary auth method
+- Session management with encrypted cookies (`gorilla/securecookie`)
+- Auth middleware supporting three modes: OAuth session, X-API-Key, passthrough
+- User management with RBAC (admin/user roles)
+- Group-based routing rules (allow/deny providers and models)
+- GDPR-compliant user deletion with mandatory reason and audit trail
+- 5 new database tables: auth_providers, users, groups, routing_rules, audit_log
+- `docker-compose-authentik.yml` for local Authentik identity provider
+- `--with-authentik` flag for `scripts/start-stack.sh`
+- Login page with OAuth and API key fallback
+- Setup wizard for zero-config first-run experience
+- `GET /admin/status` endpoint for instance state detection
+- Startup log message guiding users to Console when no admin key is set
+- Analytics and routing decision tracking with KPI summaries
+- Model reset (`POST /models/{name}/reset`) — clears tags, benchmarks, stats; keeps model entry
+- Model full delete (`DELETE /models/{name}`) — removes all data; rediscovery starts fresh
+- Benchmark model responses now persisted in database and viewable in the UI
+  - `response TEXT` column added to `benchmark_results`
+  - Expandable response viewer per model result in Config/Benchmarks section
+- Benchmark overhaul: 49 builtin tasks (up from 27)
+  - `coding-security` category with 3 tasks (SQL injection, JWT vulnerabilities, path traversal)
+  - 18 language-specific coding tasks (C#, Go, Rust, Java, TypeScript, Python at easy/medium/hard)
+  - Creative writing uniqueness test (3 distinct short stories)
+  - Hard summarization test with strict judge criteria
 - `SECURITY.md` — security policy and vulnerability disclosure process
 - `CONTRIBUTING.md` — contributor guide with setup, branch, and test conventions
 - GitHub issue templates (bug report, feature request)
 - GitHub pull request template
 - Dev-credential warnings in `docker-compose.yml` and `docker-compose-db.yml`
+- Comprehensive Go unit tests for all new handlers (67 tests across 10 files)
+  - Auth middleware, admin status, OAuth, console SPA, auth admin CRUD
+  - Analytics, config, providers, API keys
+- Frontend test infrastructure with Vitest + React Testing Library
+  - Hooks: useSetupStatus, useAuth, useTheme
+  - API client and App routing tests (22 tests across 5 files)
+- Frontend CI job: TypeScript type check + Vitest in GitHub Actions
+
+### Changed
+
+- `/admin` and `/admin/config` now redirect to `/console/models` and `/console/config`
+- All model management moved from inline HTML to React console at `/console/`
+
+### Removed
+
+- Old inline HTML admin UI (`admin.go`, 834 lines of embedded HTML)
+- Static `/assets/` file server (logos were only used by old HTML)
+- Dead code in `internal/api/api.go` — orphaned Server implementation (validators retained)
+
+### Fixed
+
+- Analytics latency time series query using incorrect `date_trunc` unit strings (`"1 hour"` → `"hour"`)
 
 ---
 

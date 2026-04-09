@@ -66,7 +66,7 @@ func (s *ServerTestSuite) TestHandleOllamaChat() {
 
 	// Configure mock behavior
 	s.mockDB.On("GetAllModels").Return(modelMap, nil)
-	s.mockLLM.On("DecideModelBasedOnCapabilities", "What is the weather like?", mock.Anything).Return("gpt-4-turbo", nil)
+	s.mockLLM.On("DecideModelBasedOnCapabilities", "What is the weather like?", mock.Anything).Return(models.RoutingResult{ModelName: "gpt-4-turbo"}, nil)
 
 	// We need to specify modelInfo parameter precisely for ChatWithModel
 	modelInfo := models.ModelInfo{

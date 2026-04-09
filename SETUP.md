@@ -6,9 +6,27 @@ This guide walks you through configuring and running PiPiMink. For an overview o
 
 - Go 1.25+
 - Docker and Docker Compose v2
-- At least one configured provider API key
+- At least one LLM provider API key (OpenAI, Anthropic, Gemini, or a local server)
 
-## 1. Configure providers and environment
+## Option A: Console Setup (recommended)
+
+The fastest way to get started — no config files needed:
+
+```bash
+./scripts/start-stack.sh
+```
+
+Open `http://localhost:8080` and the setup wizard will walk you through:
+
+1. Setting an admin API key to secure the instance
+1. Adding your first LLM provider and API key
+1. Discovering available models
+
+All settings are stored in `.env` and `providers.json` automatically. You can change everything later in the Console UI under **Settings** and **Providers**.
+
+## Option B: File-based Configuration
+
+For CI/CD, Kubernetes, or if you prefer editing files directly, use the example templates:
 
 ```bash
 cp providers.example.json providers.json   # edit with your provider URLs & env var names
@@ -29,6 +47,14 @@ DEFAULT_CHAT_MODEL=gpt-4-turbo    # fallback if routing fails
 BENCHMARK_JUDGE_PROVIDER=openai   # provider used to score LLM-judge benchmark tasks
 BENCHMARK_JUDGE_MODEL=gpt-4o      # should be a capable chat model
 PORT=8080
+
+# OAuth / OIDC (optional — omit for API-key-only mode)
+OAUTH_ISSUER_URL=http://localhost:9000/application/o/pipimink/
+OAUTH_CLIENT_ID=pipimink-console
+OAUTH_CLIENT_SECRET=
+OAUTH_REDIRECT_URL=http://localhost:8080/auth/callback
+OAUTH_AUTO_PROVISION=true
+SESSION_SECRET=
 ```
 
 ## 2. Configure providers
@@ -133,7 +159,7 @@ AZURE_FOUNDRY_GPT4O_API_KEY=hI2jKlMn...
 
 **Step 3 — Discover and tag as usual:**
 
-Open `/admin`, click **Discover Models** — PiPiMink reads the `model_configs` list and registers all models. Then select them and click **Tag Selected** to run the capability interview. Each model call automatically uses its own API key and endpoint path.
+Open the console at `/console/models`, click **Discover Models** — PiPiMink reads the `model_configs` list and registers all models. Then select them and click **Tag Selected** to run the capability interview. Each model call automatically uses its own API key and endpoint path.
 
 #### Finding your endpoint URLs and API keys
 
@@ -146,18 +172,20 @@ In the [Azure AI Foundry portal](https://ai.azure.com):
 ## 3. Start the stack
 
 ```bash
-./scripts/start-stack.sh
+./scripts/start-stack.sh                    # DB + PiPiMink
+./scripts/start-stack.sh --with-authentik   # also start Authentik for OAuth
 ```
 
 Service URLs:
 
-- PiPiMink API + Admin UI: `http://localhost:8080`
+- PiPiMink Console: `http://localhost:8080/console/`
 - Swagger UI: `http://localhost:8080/swagger/index.html`
 - pgAdmin: `http://localhost:5050`
+- Authentik (if started): `http://localhost:9000`
 
 ## 4. Set up your model registry
 
-Open `http://localhost:8080/admin` and:
+Open `http://localhost:8080/console/models` and:
 
 1. Click **Discover Models** — finds all models across your configured providers
 2. Select the models you want to use, click **Tag Selected** — runs the capability interview
@@ -165,11 +193,11 @@ Open `http://localhost:8080/admin` and:
 
 Models are now ready for routing.
 
-## Admin UI
+## Console UI
 
-PiPiMink ships with two admin pages, both under `/admin`.
+PiPiMink ships with a React console at `/console/` covering models, providers, config, settings, analytics, and user management.
 
-### Model lifecycle (`/admin`)
+### Model lifecycle (`/console/models`)
 
 The full model lifecycle from provider discovery to routing-ready runs in three sequential steps:
 
@@ -194,16 +222,18 @@ flowchart TD
 
 **Step-by-step:**
 
-1. **Enter your Admin API Key** in the field at the top (matches `ADMIN_API_KEY` in your `.env`).
+1. **Sign in** — if OAuth is configured, click "Sign in with Authentik". Otherwise, enter your Admin API Key (matches `ADMIN_API_KEY` in your `.env`).
 2. **Click Discover Models** — queries every configured provider for its model list. This is instant and makes no LLM calls. Newly found models appear with a yellow `discovered` badge.
 3. **Select models for tagging** — use the `Tag` checkboxes in each row, or "Select all (Tag)" to pick all at once. Ignore models you don't want to route to.
 4. **Click Tag Selected** — sends the capability interview to each model in the background. Reload the page after a moment to see results. Models that return valid capability tags get a green `tagged` badge and are enabled for routing. Models that return no strengths are automatically disabled.
 5. *(Optional)* **Select models for benchmarking** — use the `Benchmark` checkboxes, then click **Benchmark Selected**. This runs your benchmark tasks against each model and stores scores. Scores appear as coloured pills per category in the table.
 6. Use the **On/Off toggle** in any row to manually enable or disable a model at any time without re-tagging.
+7. *(Optional)* **Reset a model** — clears all tags, benchmark results, and statistics while keeping the model entry. Useful for re-evaluating a model from scratch.
+8. *(Optional)* **Delete a model** — fully removes the model and all associated data. If the model is rediscovered later, it starts fresh with no history.
 
 > Discovery, tagging, and benchmarking are fully decoupled — you can run any step independently and at your own pace.
 
-### Configuration (`/admin/config`)
+### Configuration (`/console/config`)
 
 This page controls the two inputs that shape how routing is personalized for you.
 
@@ -292,6 +322,106 @@ For Grafana stack integration:
 - Mimir/Prometheus: scrape `http://<pipimink-host>:8080/metrics`
 - Loki: forward container stdout/stderr with your log agent
 
+## Authentication
+
+PiPiMink supports two authentication modes:
+
+- **OAuth2/OIDC via Authentik** — recommended for production and multi-user environments
+- **API-key-only** — legacy mode when no OAuth provider is configured; all requests pass through
+
+### Setting up Authentik
+
+1. Start the stack with Authentik: `./scripts/start-stack.sh --with-authentik`
+1. Open `http://localhost:9000/if/flow/initial-setup/` and create an Authentik admin account
+1. In the Authentik admin panel, create an **OAuth2/OpenID Provider** for PiPiMink:
+   - **Redirect URI**: `http://localhost:8080/auth/callback`
+   - **Scopes**: `openid profile email groups`
+1. Create an **Application** linked to that provider
+1. Copy the **Client ID** and **Client Secret** into your `.env`:
+
+```env
+OAUTH_ISSUER_URL=http://localhost:9000/application/o/pipimink/
+OAUTH_CLIENT_ID=<your-client-id>
+OAUTH_CLIENT_SECRET=<your-client-secret>
+OAUTH_REDIRECT_URL=http://localhost:8080/auth/callback
+OAUTH_AUTO_PROVISION=true
+SESSION_SECRET=<64-byte-hex-string>
+```
+
+1. Restart PiPiMink — visiting `/console/` will redirect to Authentik for login
+
+### OAuth environment variables
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `OAUTH_ISSUER_URL` | *(empty)* | OIDC issuer URL (e.g. Authentik application URL) |
+| `OAUTH_CLIENT_ID` | *(empty)* | OAuth2 client ID |
+| `OAUTH_CLIENT_SECRET` | *(empty)* | OAuth2 client secret |
+| `OAUTH_REDIRECT_URL` | *(empty)* | Callback URL (`http://host:port/auth/callback`) |
+| `OAUTH_SCOPES` | `openid profile email groups` | Space-separated OIDC scopes |
+| `OAUTH_AUTO_PROVISION` | `true` | Auto-create users on first OAuth login |
+| `SESSION_SECRET` | *(random)* | 64-byte hex key for session cookie encryption |
+
+OAuth is enabled when `OAUTH_ISSUER_URL`, `OAUTH_CLIENT_ID`, and `OAUTH_CLIENT_SECRET` are all set. Otherwise PiPiMink runs in API-key-only mode.
+
+### User and group management
+
+Navigate to `/console/users` to manage:
+
+- **Auth Providers** — view and configure OAuth and LDAP provider settings, test connectivity
+- **Users** — view all users, change roles (admin/user), add local users, delete users (GDPR-compliant with mandatory reason)
+- **Groups** — synced from the identity provider; assign roles and configure per-group routing rules (allow/deny specific providers or models)
+- **Audit Log** — chronological record of all auth-related actions
+
+## Securing API Access
+
+### Requiring authentication for chat endpoints
+
+By default, chat and inference endpoints (`/chat`, `/v1/chat/completions`, `/api/chat`) accept requests without authentication, so existing clients work without any changes. To enforce authentication for these endpoints:
+
+```env
+REQUIRE_AUTH_FOR_CHAT=true
+```
+
+When this is set, every chat request must include either a valid session cookie (browser/OAuth flow) or a Bearer token. Unauthenticated requests receive a `401 Unauthorized` response.
+
+This setting has no effect on admin endpoints, which always require either an `X-API-Key` header or an admin session.
+
+### Creating Bearer tokens for programmatic access
+
+Bearer tokens let scripts and API clients authenticate without going through the OAuth browser flow. They carry the `ppm_` prefix so they are easy to identify in logs and secret scanners.
+
+**Create a token** (requires an active session or an existing Bearer token with admin rights):
+
+```bash
+curl -X POST http://localhost:8080/auth/tokens \
+  -H "Authorization: Bearer ppm_your-existing-token" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "ci-pipeline", "expires_in": "8760h"}'
+```
+
+The plaintext token is returned **once** at creation and never stored — copy it immediately.
+
+**Use the token in requests:**
+
+```bash
+# OpenAI-compatible endpoint
+curl -H "Authorization: Bearer ppm_your-token" \
+  http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"Hello"}]}'
+
+# Admin endpoint — X-API-Key still works too
+curl -H "X-API-Key: your-admin-api-key" \
+  http://localhost:8080/models
+```
+
+### Token management
+
+Navigate to `/console/users` → **API Keys** to view, rotate, and revoke tokens through the UI. Revoked tokens are rejected immediately.
+
+---
+
 ## Local Development
 
 Build and run:
@@ -309,11 +439,19 @@ go test -short ./...   # skip integration tests (no DB required)
 go test -cover ./...
 ```
 
+Frontend testing:
+
+```bash
+cd web/console
+npm test              # single run
+npm run test:watch    # watch mode
+```
+
 ## Helper Scripts
 
 | Script | Purpose |
 | --- | --- |
-| `scripts/start-stack.sh` | Starts the database and application in the correct order |
+| `scripts/start-stack.sh` | Starts the database and application; use `--with-authentik` to also start the Authentik identity provider |
 | `scripts/generate-swagger.sh` | Regenerates OpenAPI docs after API changes |
 | `scripts/test_chat_request.sh` | Quick end-to-end smoke test |
 | `scripts/cleanup.sh` | Local maintenance and lint helper |

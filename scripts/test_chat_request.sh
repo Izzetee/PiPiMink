@@ -1,13 +1,38 @@
 #!/bin/bash
 
-# This script tests the PiPiMink's model selection functionality
+# This script tests the PiPiMink's model selection functionality.
+#
+# Authentication:
+#   Option 1 (Admin API key):  export PIPIMINK_API_KEY=your-admin-api-key
+#   Option 2 (Bearer token):   export PIPIMINK_API_KEY=ppm_your-user-bearer-token
+#   Option 3 (No auth):        leave unset (works when REQUIRE_AUTH_FOR_CHAT=false, the default)
+#
+# When REQUIRE_AUTH_FOR_CHAT=true, one of the above must be set.
 
 API_ENDPOINT="http://localhost:8080/chat"
 OPENAI_ENDPOINT="http://localhost:8080/v1/chat/completions"
 
+# Build auth header from PIPIMINK_API_KEY env var
+AUTH_HEADER=()
+if [ -n "${PIPIMINK_API_KEY:-}" ]; then
+  if [[ "$PIPIMINK_API_KEY" == ppm_* ]]; then
+    # Bearer token (user API token)
+    AUTH_HEADER=(-H "Authorization: Bearer $PIPIMINK_API_KEY")
+    echo "Using Bearer token authentication"
+  else
+    # Admin API key
+    AUTH_HEADER=(-H "X-API-Key: $PIPIMINK_API_KEY")
+    echo "Using X-API-Key authentication"
+  fi
+else
+  echo "No authentication configured (anonymous mode)"
+fi
+
+echo ""
 echo "=== Single-turn: technical question ==="
 curl -s -X POST \
   -H "Content-Type: application/json" \
+  "${AUTH_HEADER[@]}" \
   -d '{"message": "Explain quantum computing principles and their application in cryptography, with code examples in Python"}' \
   $API_ENDPOINT | jq .
 
@@ -15,6 +40,7 @@ echo ""
 echo "=== Single-turn: creative writing ==="
 curl -s -X POST \
   -H "Content-Type: application/json" \
+  "${AUTH_HEADER[@]}" \
   -d '{"message": "Write a short poem about artificial intelligence"}' \
   $API_ENDPOINT | jq .
 
@@ -22,6 +48,7 @@ echo ""
 echo "=== Single-turn: mathematical problem ==="
 curl -s -X POST \
   -H "Content-Type: application/json" \
+  "${AUTH_HEADER[@]}" \
   -d '{"message": "Solve the differential equation dy/dx = 2xy with the initial condition y(0) = 1"}' \
   $API_ENDPOINT | jq .
 
@@ -29,6 +56,7 @@ echo ""
 echo "=== Multi-turn: conversation history (native /chat) ==="
 curl -s -X POST \
   -H "Content-Type: application/json" \
+  "${AUTH_HEADER[@]}" \
   -d '{
     "messages": [
       {"role": "user",      "content": "How do I implement a binary search tree in Go?"},
@@ -42,6 +70,7 @@ echo ""
 echo "=== Multi-turn: conversation history (OpenAI-compatible /v1/chat/completions) ==="
 curl -s -X POST \
   -H "Content-Type: application/json" \
+  "${AUTH_HEADER[@]}" \
   -d '{
     "model": "gpt-4-turbo",
     "messages": [

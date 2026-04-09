@@ -40,13 +40,15 @@ func TestDecideModelBasedOnCapabilitiesUsesDecisionCache(t *testing.T) {
 		"gpt-4-turbo": {Source: "openai", Tags: `{"strengths":["speed"]}`, Enabled: true},
 	}
 
-	model1, err1 := client.DecideModelBasedOnCapabilities("Plan a complex migration", availableModels)
-	model2, err2 := client.DecideModelBasedOnCapabilities("Plan a complex migration", availableModels)
+	result1, err1 := client.DecideModelBasedOnCapabilities("Plan a complex migration", availableModels)
+	result2, err2 := client.DecideModelBasedOnCapabilities("Plan a complex migration", availableModels)
 
 	assert.NoError(t, err1)
 	assert.NoError(t, err2)
-	assert.Equal(t, "gpt-4", model1)
-	assert.Equal(t, "gpt-4", model2)
+	assert.Equal(t, "gpt-4", result1.ModelName)
+	assert.Equal(t, "gpt-4", result2.ModelName)
+	assert.False(t, result1.CacheHit)
+	assert.True(t, result2.CacheHit)
 	assert.Equal(t, int32(1), atomic.LoadInt32(&callCount))
 }
 

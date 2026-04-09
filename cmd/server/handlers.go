@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"time"
 
 	"PiPiMink/internal/benchmark"
 	"PiPiMink/internal/models"
@@ -82,7 +83,8 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Use LLM to decide which model to use based on the message and model capabilities
-	modelName, err := s.llmClient.DecideModelBasedOnCapabilities(routingMessage, enabledModels)
+	routingResult, err := s.llmClient.DecideModelBasedOnCapabilities(routingMessage, enabledModels)
+	modelName := routingResult.ModelName
 	if err != nil {
 		log.Printf("Error deciding model: %v, falling back to default model", err)
 		modelName = s.getFallbackModelName(enabledModels)
@@ -109,12 +111,21 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	// Call the selected model with the full message history
 	log.Printf("Routing request to model: %s (history length: %d)", modelName, len(messages))
+	responseStart := time.Now()
 	response, err := s.llmClient.ChatWithModel(modelInfo, modelName, messages)
+	responseLatencyMs := time.Since(responseStart).Milliseconds()
+	status := "success"
 	if err != nil {
 		log.Printf("Error calling model: %v", err)
+		status = "error"
 		http.Error(w, "Error processing request", http.StatusInternalServerError)
+		// Still log the routing decision even on error
+		s.logRoutingDecision(routingResult, routingMessage, modelInfo.Source, responseLatencyMs, status, getUserID(r))
 		return
 	}
+
+	// Log the routing decision asynchronously
+	s.logRoutingDecision(routingResult, routingMessage, modelInfo.Source, responseLatencyMs, status, getUserID(r))
 
 	chatRes := models.ChatResponse{
 		Response: response,
@@ -135,16 +146,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} map[string]string
 // @Failure 401 {object} map[string]string "Unauthorized"
 // @Router /models/update [post]
+// Auth: admin (enforced by middleware)
 func (s *Server) handleUpdateModels(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received request to update models")
-
-	// Check for authentication/authorization
-	apiKey := r.Header.Get("X-API-Key")
-	if apiKey != s.config.AdminAPIKey {
-		log.Printf("Unauthorized model update attempt")
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
 
 	// Start the update process
 	go func() {
@@ -185,23 +189,29 @@ func (s *Server) handleListModels(w http.ResponseWriter, r *http.Request) {
 	// Convert internal model structure to a response format
 	modelsList := make([]map[string]interface{}, 0, len(s.modelCollection.Models))
 	for name, info := range s.modelCollection.Models {
+		tagged := hasUsefulTags(info.Tags)
 		modelData := map[string]interface{}{
 			"name":            name,
 			"source":          info.Source,
 			"enabled":         info.Enabled,
-			"tagged":          hasUsefulTags(info.Tags),
+			"tagged":          tagged,
 			"hasReasoning":    info.HasReasoning,
 			"updatedAt":       info.UpdatedAt,
 			"benchmarkScores": info.BenchmarkScores,
 			"avgLatencyMs":    info.AvgLatencyMs,
+			"tags":            parseTags(info.Tags),
+		}
+		if tagged {
+			modelData["taggedBy"] = "self-assessment"
 		}
 		modelsList = append(modelsList, modelData)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"models": modelsList,
-		"count":  len(modelsList),
+		"models":         modelsList,
+		"count":          len(modelsList),
+		"benchmarkJudge": s.resolveBenchmarkJudgeName(),
 	})
 }
 
@@ -265,6 +275,10 @@ func (s *Server) handleOpenAIChatCompletions(w http.ResponseWriter, r *http.Requ
 		s.modelMutex.RUnlock()
 	}
 
+	// Variables for routing decision logging (captured by defer closure below)
+	var openAIResponseLatencyMs int64
+	openAIResponseStatus := "success"
+
 	// If model doesn't exist or isn't specified, route based on capabilities
 	if !exists {
 		// Get enabled models for selection
@@ -280,10 +294,10 @@ func (s *Server) handleOpenAIChatCompletions(w http.ResponseWriter, r *http.Requ
 		}
 
 		// Select model based on capabilities
-		var err error
-		modelName, err = s.llmClient.DecideModelBasedOnCapabilities(userMessage, enabledModels)
-		if err != nil {
-			log.Printf("Error deciding model: %v, falling back to default model", err)
+		routingResult, routeErr := s.llmClient.DecideModelBasedOnCapabilities(userMessage, enabledModels)
+		modelName = routingResult.ModelName
+		if routeErr != nil {
+			log.Printf("Error deciding model: %v, falling back to default model", routeErr)
 			modelName = s.getFallbackModelName(enabledModels)
 			if modelName == "" {
 				http.Error(w, "No enabled models available", http.StatusInternalServerError)
@@ -301,13 +315,22 @@ func (s *Server) handleOpenAIChatCompletions(w http.ResponseWriter, r *http.Requ
 			http.Error(w, "Model not found", http.StatusBadRequest)
 			return
 		}
+
+		// Log routing decision after we get a response (deferred below)
+		uid := getUserID(r)
+		defer func() {
+			s.logRoutingDecision(routingResult, userMessage, modelInfo.Source, openAIResponseLatencyMs, openAIResponseStatus, uid)
+		}()
 	}
 
 	// Call the selected model with the full message history
 	log.Printf("Routing request to model: %s (history length: %d)", modelName, len(openAIReq.Messages))
+	responseStart := time.Now()
 	response, err := s.llmClient.ChatWithModel(modelInfo, modelName, openAIReq.Messages)
+	openAIResponseLatencyMs = time.Since(responseStart).Milliseconds()
 	if err != nil {
 		log.Printf("Error calling model: %v", err)
+		openAIResponseStatus = "error"
 		http.Error(w, "Error processing request", http.StatusInternalServerError)
 		return
 	}
@@ -475,15 +498,8 @@ func (s *Server) handleGetNonReasoningModels(w http.ResponseWriter, r *http.Requ
 }
 
 // handleUpdateModelReasoning updates the reasoning capability of a model
+// Auth: admin (enforced by middleware)
 func (s *Server) handleUpdateModelReasoning(w http.ResponseWriter, r *http.Request) {
-	// Check for authentication/authorization
-	apiKey := r.Header.Get("X-API-Key")
-	if apiKey != s.config.AdminAPIKey {
-		log.Printf("Unauthorized model reasoning update attempt")
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -541,11 +557,8 @@ func (s *Server) handleUpdateModelReasoning(w http.ResponseWriter, r *http.Reque
 // @Failure 401 {object} map[string]string "Unauthorized"
 // @Failure 503 {object} map[string]string "Benchmarks disabled"
 // @Router /models/benchmark [post]
+// Auth: admin (enforced by middleware)
 func (s *Server) handleRunBenchmarks(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("X-API-Key") != s.config.AdminAPIKey {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
 	if !s.config.BenchmarkEnabled {
 		http.Error(w, "Benchmarks are disabled (set BENCHMARK_ENABLED=true)", http.StatusServiceUnavailable)
 		return
@@ -568,9 +581,35 @@ func (s *Server) handleRunBenchmarks(w http.ResponseWriter, r *http.Request) {
 		if len(body.Models) > 0 {
 			targets := body.Models
 			go func() {
-				for _, t := range targets {
-					s.runBenchmarks(context.Background(), t.Name, categoryFilter)
+				s.benchmarkOpMutex.Lock()
+				s.benchmarkOperation = &operationState{
+					Status:    "running",
+					Total:     len(targets),
+					Completed: 0,
+					StartedAt: time.Now().UTC().Format(time.RFC3339),
 				}
+				s.benchmarkOpMutex.Unlock()
+
+				for i, t := range targets {
+					s.benchmarkOpMutex.Lock()
+					s.benchmarkOperation.CurrentModel = t.Name
+					s.benchmarkOperation.CompletedTasks = 0
+					s.benchmarkOperation.TotalTasks = 0
+					s.benchmarkOperation.CurrentTask = ""
+					s.benchmarkOpMutex.Unlock()
+
+					s.runBenchmarks(context.Background(), t.Name, categoryFilter)
+
+					s.benchmarkOpMutex.Lock()
+					s.benchmarkOperation.Completed = i + 1
+					s.benchmarkOpMutex.Unlock()
+				}
+
+				s.benchmarkOpMutex.Lock()
+				s.benchmarkOperation.Status = "completed"
+				s.benchmarkOperation.CurrentModel = ""
+				s.benchmarkOperation.CurrentTask = ""
+				s.benchmarkOpMutex.Unlock()
 			}()
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusAccepted)
@@ -631,6 +670,48 @@ func (s *Server) handleGetModelBenchmarks(w http.ResponseWriter, r *http.Request
 		"model":  modelName,
 		"source": source,
 		"scores": scores,
+	})
+}
+
+// handleGetModelBenchmarkResults returns per-task benchmark results for a single model.
+// @Summary Get model benchmark results
+// @Description Returns individual task-level benchmark results for the specified model.
+// @Tags models
+// @Param name path string true "Model name"
+// @Param source query string false "Provider source"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} map[string]string "Model not found"
+// @Router /models/{name}/benchmark-results [get]
+func (s *Server) handleGetModelBenchmarkResults(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	modelName, _ := url.PathUnescape(vars["name"])
+
+	source := r.URL.Query().Get("source")
+	if source == "" {
+		s.modelMutex.RLock()
+		if info, ok := s.modelCollection.GetModel(modelName); ok {
+			source = info.Source
+		}
+		s.modelMutex.RUnlock()
+	}
+	if source == "" {
+		http.Error(w, "model not found", http.StatusNotFound)
+		return
+	}
+
+	results, err := s.db.GetBenchmarkResults(modelName, source)
+	if err != nil {
+		log.Printf("Error fetching benchmark results for %s: %v", modelName, err)
+		http.Error(w, "error fetching benchmark results", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"model":          modelName,
+		"source":         source,
+		"results":        results,
+		"benchmarkJudge": s.resolveBenchmarkJudgeName(),
 	})
 }
 
@@ -713,9 +794,10 @@ func (s *Server) handleBenchmarkLeaderboard(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"leaderboard": ranked,
-		"categories":  categories,
-		"count":       len(ranked),
+		"leaderboard":    ranked,
+		"categories":     categories,
+		"count":          len(ranked),
+		"benchmarkJudge": s.resolveBenchmarkJudgeName(),
 	})
 }
 
@@ -732,12 +814,8 @@ func (s *Server) handleBenchmarkLeaderboard(w http.ResponseWriter, r *http.Reque
 // @Failure 400 {object} map[string]string "Bad request"
 // @Failure 401 {object} map[string]string "Unauthorized"
 // @Router /models/{name}/enable [patch]
+// Auth: admin (enforced by middleware)
 func (s *Server) handleSetModelEnabled(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("X-API-Key") != s.config.AdminAPIKey {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
 	name, _ := url.PathUnescape(mux.Vars(r)["name"])
 	var body struct {
 		Source  string `json:"source"`
@@ -771,6 +849,98 @@ func (s *Server) handleSetModelEnabled(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleResetModel clears a model's tags, benchmark results, and routing analytics.
+// @Summary Reset a model
+// @Description Clears tags, benchmarks, and analytics for a model but keeps the model entry.
+// @Tags models,admin
+// @Param name path string true "Model name (URL-encoded)"
+// @Param X-API-Key header string true "Admin API Key"
+// @Accept json
+// @Produce json
+// @Param body body object true "source field required" example({"source":"openai"})
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} map[string]string "Bad request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Router /models/{name}/reset [post]
+// Auth: admin (enforced by middleware)
+func (s *Server) handleResetModel(w http.ResponseWriter, r *http.Request) {
+	name, _ := url.PathUnescape(mux.Vars(r)["name"])
+	var body struct {
+		Source string `json:"source"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Source == "" {
+		http.Error(w, `request body must be {"source":"..."}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := s.db.ResetModel(name, body.Source); err != nil {
+		log.Printf("Error resetting model %s (%s): %v", name, body.Source, err)
+		http.Error(w, "Failed to reset model", http.StatusInternalServerError)
+		return
+	}
+
+	// Update in-memory collection: disable and clear tags.
+	s.modelMutex.Lock()
+	if info, ok := s.modelCollection.GetModel(name); ok {
+		info.Enabled = false
+		info.Tags = `{"strengths":[],"weaknesses":[]}`
+		s.modelCollection.UpdateModel(name, info)
+	}
+	s.modelMutex.Unlock()
+
+	log.Printf("Model %s (%s) has been reset", name, body.Source)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"status": "reset",
+		"name":   name,
+		"source": body.Source,
+	})
+}
+
+// handleDeleteModel permanently deletes a model and all associated data.
+// @Summary Delete a model
+// @Description Permanently deletes a model and all its benchmarks, tags, and analytics.
+// @Tags models,admin
+// @Param name path string true "Model name (URL-encoded)"
+// @Param X-API-Key header string true "Admin API Key"
+// @Accept json
+// @Produce json
+// @Param body body object true "source field required" example({"source":"openai"})
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} map[string]string "Bad request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Router /models/{name} [delete]
+// Auth: admin (enforced by middleware)
+func (s *Server) handleDeleteModel(w http.ResponseWriter, r *http.Request) {
+	name, _ := url.PathUnescape(mux.Vars(r)["name"])
+	var body struct {
+		Source string `json:"source"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Source == "" {
+		http.Error(w, `request body must be {"source":"..."}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := s.db.DeleteModelFull(name, body.Source); err != nil {
+		log.Printf("Error deleting model %s (%s): %v", name, body.Source, err)
+		http.Error(w, "Failed to delete model", http.StatusInternalServerError)
+		return
+	}
+
+	// Remove from in-memory collection.
+	s.modelMutex.Lock()
+	s.modelCollection.RemoveModel(name)
+	s.modelMutex.Unlock()
+
+	log.Printf("Model %s (%s) has been permanently deleted", name, body.Source)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"status": "deleted",
+		"name":   name,
+		"source": body.Source,
+	})
+}
+
 // handleDiscoverModels queries every provider for its model list and registers new models.
 // @Summary Discover models from all providers
 // @Description Queries each configured provider for its model list and registers any new models (no tagging).
@@ -779,12 +949,8 @@ func (s *Server) handleSetModelEnabled(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string "Unauthorized"
 // @Router /models/discover [post]
+// Auth: admin (enforced by middleware)
 func (s *Server) handleDiscoverModels(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("X-API-Key") != s.config.AdminAPIKey {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
 	providers, discovered, err := s.discoverModels()
 	if err != nil {
 		http.Error(w, "Discovery failed: "+err.Error(), http.StatusInternalServerError)
@@ -811,12 +977,8 @@ func (s *Server) handleDiscoverModels(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} map[string]string "Bad request"
 // @Failure 401 {object} map[string]string "Unauthorized"
 // @Router /models/tag [post]
+// Auth: admin (enforced by middleware)
 func (s *Server) handleTagModels(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("X-API-Key") != s.config.AdminAPIKey {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
 	var body struct {
 		Models []ModelTarget `json:"models"`
 	}
@@ -836,14 +998,49 @@ func (s *Server) handleTagModels(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleAdminUI serves the admin frontend.
-// @Summary Admin UI
-// @Description Serves the admin web interface for model discovery, tagging, and benchmarking.
-// @Tags admin
-// @Produce html
-// @Success 200 {string} string "HTML page"
-// @Router /admin [get]
-func (s *Server) handleAdminUI(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(adminHTML))
+// handleTagStatus returns the current tagging operation progress.
+// @Summary Get tagging operation status
+// @Description Returns the progress of the current or last tagging operation.
+// @Tags models,admin
+// @Produce json
+// @Param X-API-Key header string true "Admin API Key"
+// @Success 200 {object} operationState
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Router /models/tag/status [get]
+// Auth: admin (enforced by middleware)
+func (s *Server) handleTagStatus(w http.ResponseWriter, r *http.Request) {
+	s.tagOpMutex.Lock()
+	op := s.tagOperation
+	s.tagOpMutex.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	if op == nil {
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "idle"})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(op)
 }
+
+// handleBenchmarkStatus returns the current benchmark operation progress.
+// @Summary Get benchmark operation status
+// @Description Returns the progress of the current or last benchmark operation.
+// @Tags models,admin
+// @Produce json
+// @Param X-API-Key header string true "Admin API Key"
+// @Success 200 {object} operationState
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Router /models/benchmark/status [get]
+// Auth: admin (enforced by middleware)
+func (s *Server) handleBenchmarkStatus(w http.ResponseWriter, r *http.Request) {
+	s.benchmarkOpMutex.Lock()
+	op := s.benchmarkOperation
+	s.benchmarkOpMutex.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	if op == nil {
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "idle"})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(op)
+}
+

@@ -219,6 +219,121 @@ func TestInitSchema_ColumnsAlreadyExist(t *testing.T) {
 		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 	);`)).WillReturnResult(sqlmock.NewResult(0, 0))
 
+	// analytics schema
+	mock.ExpectExec(regexp.QuoteMeta(`
+	CREATE TABLE IF NOT EXISTS routing_decisions (
+		id                 SERIAL PRIMARY KEY,
+		timestamp          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		prompt_snippet     TEXT NOT NULL,
+		full_prompt        TEXT NOT NULL,
+		analyzed_tags      JSONB NOT NULL DEFAULT '[]',
+		tag_relevance      JSONB NOT NULL DEFAULT '{}',
+		selected_model     TEXT NOT NULL,
+		provider           TEXT NOT NULL DEFAULT '',
+		routing_reason     TEXT NOT NULL DEFAULT '',
+		evaluator_model    TEXT NOT NULL DEFAULT '',
+		evaluation_time_ms BIGINT NOT NULL DEFAULT 0,
+		cache_hit          BOOLEAN NOT NULL DEFAULT FALSE,
+		latency_ms         BIGINT NOT NULL DEFAULT 0,
+		status             TEXT NOT NULL DEFAULT 'success'
+	);
+	CREATE INDEX IF NOT EXISTS idx_routing_decisions_ts    ON routing_decisions(timestamp);
+	CREATE INDEX IF NOT EXISTS idx_routing_decisions_model ON routing_decisions(selected_model);
+	`)).WillReturnResult(sqlmock.NewResult(0, 0))
+
+	// user_id column migration on routing_decisions
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS (
+		SELECT 1 FROM information_schema.columns
+		WHERE table_name = 'routing_decisions' AND column_name = 'user_id'
+	)`)).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+
+	mock.ExpectExec(regexp.QuoteMeta(`CREATE INDEX IF NOT EXISTS idx_routing_decisions_user ON routing_decisions(user_id)`)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	// auth schema
+	mock.ExpectExec(regexp.QuoteMeta(`
+	CREATE TABLE IF NOT EXISTS auth_providers (
+		id             TEXT PRIMARY KEY,
+		type           TEXT NOT NULL,
+		name           TEXT NOT NULL,
+		status         TEXT NOT NULL DEFAULT 'not_configured',
+		issuer_url     TEXT NOT NULL DEFAULT '',
+		client_id      TEXT NOT NULL DEFAULT '',
+		client_secret  TEXT NOT NULL DEFAULT '',
+		scopes         TEXT NOT NULL DEFAULT '',
+		redirect_uri   TEXT NOT NULL DEFAULT '',
+		auto_provision BOOLEAN NOT NULL DEFAULT FALSE,
+		server_url     TEXT NOT NULL DEFAULT '',
+		bind_dn        TEXT NOT NULL DEFAULT '',
+		base_dn        TEXT NOT NULL DEFAULT '',
+		search_filter  TEXT NOT NULL DEFAULT '',
+		group_mapping  TEXT NOT NULL DEFAULT '',
+		last_verified  TIMESTAMPTZ,
+		created_at     TIMESTAMPTZ
+	);
+
+	CREATE TABLE IF NOT EXISTS users (
+		id                 TEXT PRIMARY KEY,
+		name               TEXT NOT NULL,
+		email              TEXT NOT NULL UNIQUE,
+		role               TEXT NOT NULL DEFAULT 'user',
+		auth_source        TEXT NOT NULL DEFAULT 'local',
+		auth_provider_name TEXT,
+		groups_list        JSONB NOT NULL DEFAULT '[]',
+		last_login         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		request_count      BIGINT NOT NULL DEFAULT 0,
+		token_usage        BIGINT NOT NULL DEFAULT 0,
+		avatar_url         TEXT
+	);
+
+	CREATE TABLE IF NOT EXISTS groups (
+		id           TEXT PRIMARY KEY,
+		name         TEXT NOT NULL,
+		source       TEXT NOT NULL,
+		member_count INT NOT NULL DEFAULT 0,
+		role         TEXT NOT NULL DEFAULT 'user',
+		synced_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);
+
+	CREATE TABLE IF NOT EXISTS routing_rules (
+		id          TEXT PRIMARY KEY,
+		group_id    TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+		type        TEXT NOT NULL,
+		providers   JSONB,
+		models      JSONB,
+		description TEXT NOT NULL DEFAULT ''
+	);
+
+	CREATE TABLE IF NOT EXISTS audit_log (
+		id        TEXT PRIMARY KEY,
+		timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		actor     TEXT NOT NULL,
+		action    TEXT NOT NULL,
+		target    TEXT NOT NULL,
+		details   TEXT NOT NULL DEFAULT '',
+		reason    TEXT
+	);
+	CREATE INDEX IF NOT EXISTS idx_audit_log_ts ON audit_log(timestamp);
+	CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);
+	`)).WillReturnResult(sqlmock.NewResult(0, 0))
+
+	// token schema
+	mock.ExpectExec(regexp.QuoteMeta(`
+	CREATE TABLE IF NOT EXISTS user_api_tokens (
+		id           TEXT PRIMARY KEY,
+		user_id      TEXT NOT NULL,
+		name         TEXT NOT NULL DEFAULT '',
+		token_hash   TEXT NOT NULL UNIQUE,
+		created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		last_used_at TIMESTAMPTZ,
+		expires_at   TIMESTAMPTZ,
+		revoked      BOOLEAN NOT NULL DEFAULT FALSE
+	);
+	CREATE INDEX IF NOT EXISTS idx_user_api_tokens_hash ON user_api_tokens(token_hash);
+	CREATE INDEX IF NOT EXISTS idx_user_api_tokens_user ON user_api_tokens(user_id);
+	`)).WillReturnResult(sqlmock.NewResult(0, 0))
+
 	err := db.InitSchema()
 	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())

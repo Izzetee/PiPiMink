@@ -41,7 +41,6 @@ The PiPiMink logo and visual assets in the `assets/` directory are not covered b
 If you would like permission for any use not covered above, please reach out:
 
 - **GitHub Issues:** <https://github.com/Izzetee/PiPiMink/issues>
-- **Email:** [INSERT CONTACT EMAIL]
 
 We are happy to discuss and generally supportive of community use — just ask.
 

@@ -77,6 +77,16 @@ go run main.go
 ./scripts/update_models.sh
 ```
 
+**Run the frontend dev server (React console UI):**
+
+```bash
+cd web/console
+npm install
+npm run dev    # starts Vite on port 5173 with hot reload
+```
+
+The dev server proxies API requests to `http://localhost:8080`, so the Go backend must be running.
+
 ---
 
 ## Branch Conventions
@@ -120,8 +130,12 @@ docs: update provider configuration examples
 - Fill in the PR template (description, test plan, checklist).
 - All CI checks must pass before merging:
   - `Quality And Tests` (gofmt, go vet, go test)
+  - `Frontend` (tsc --noEmit, vitest run)
   - `Markdown Lint`
   - `Secret Scan` (Gitleaks)
+  - `Go Lint` (golangci-lint)
+  - `Govulncheck`
+  - `CodeQL`
 - A maintainer review is required before merge.
 
 ---
@@ -131,7 +145,9 @@ docs: update provider configuration examples
 - Run `gofmt -w .` before committing — the CI enforces it.
 - Follow the existing package structure. New handler logic goes in `cmd/server/`, not `internal/api/`.
 - Keep changes consistent with the interface-driven design in `cmd/server/interfaces.go`.
+- **Authentication must not be checked inline inside handlers.** Auth is enforced centrally by `cmd/server/auth_middleware.go`. New handlers must rely on the middleware — never add `if !isAdmin` or token validation logic inside a handler function.
 - Do not hand-edit generated files in `docs/` — regenerate with `./scripts/generate-swagger.sh`.
+- Frontend code lives in `web/console/`. It uses TypeScript strict mode, Tailwind CSS v4, and React 19. Run `npm run build` in `web/console/` to verify the frontend compiles before submitting.
 
 ---
 
@@ -147,6 +163,16 @@ go test -cover ./...    # with coverage
 - Unit tests use `sqlmock` — see existing patterns in `internal/database/`.
 - Extend `cmd/server/test_utils.go` and `internal/llm/test_helpers.go` before adding new fixtures.
 - The Docker build runs `go test -v ./...` — a failing test will block the image build.
+- Frontend:
+
+  ```bash
+  cd web/console
+  npm test              # single run (vitest run)
+  npm run test:watch    # watch mode
+  npx tsc --noEmit      # type check only
+  ```
+
+  Tests use Vitest + React Testing Library (jsdom). Test files live next to their source (`*.test.ts` / `*.test.tsx`).
 
 ---
 

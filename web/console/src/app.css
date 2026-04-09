@@ -1,0 +1,43 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Primary (Indigo) */
+  --color-primary-50: oklch(0.962 0.018 272.314);
+  --color-primary-100: oklch(0.930 0.034 272.788);
+  --color-primary-200: oklch(0.870 0.065 274.039);
+  --color-primary-300: oklch(0.785 0.115 274.713);
+  --color-primary-400: oklch(0.673 0.182 276.935);
+  --color-primary-500: oklch(0.585 0.233 277.117);
+  --color-primary-600: oklch(0.511 0.262 276.966);
+  --color-primary-700: oklch(0.457 0.240 277.023);
+  --color-primary-800: oklch(0.398 0.195 277.366);
+  --color-primary-900: oklch(0.359 0.144 278.697);
+  --color-primary-950: oklch(0.257 0.09 281.288);
+
+  /* Secondary (Amber) */
+  --color-secondary-50: oklch(0.987 0.022 95.277);
+  --color-secondary-100: oklch(0.962 0.059 95.617);
+  --color-secondary-200: oklch(0.924 0.12 95.946);
+  --color-secondary-300: oklch(0.879 0.169 91.605);
+  --color-secondary-400: oklch(0.828 0.189 84.429);
+  --color-secondary-500: oklch(0.769 0.188 70.08);
+  --color-secondary-600: oklch(0.666 0.179 58.318);
+  --color-secondary-700: oklch(0.555 0.163 48.998);
+  --color-secondary-800: oklch(0.473 0.137 46.201);
+  --color-secondary-900: oklch(0.414 0.112 45.904);
+  --color-secondary-950: oklch(0.279 0.077 45.635);
+}
+
+/* Fade-in animation for UserMenu dropdown */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@utility animate-fade-in {
+  animation: fade-in 150ms ease-out;
+}

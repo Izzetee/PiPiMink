@@ -11,6 +11,10 @@ import (
 // ChatFunc is the function signature for calling a model. It matches llm.Client.ChatWithModel.
 type ChatFunc func(modelInfo models.ModelInfo, modelName string, messages []map[string]interface{}) (string, error)
 
+// ProgressFunc is called after each benchmark task completes.
+// taskIndex is the 0-based index of the completed task within the current model's run.
+type ProgressFunc func(modelName string, taskIndex, totalTasks int, result *TaskResult)
+
 // TaskResult holds the outcome of running a single benchmark task against one model.
 type TaskResult struct {
 	TaskID    string
@@ -23,6 +27,7 @@ type TaskResult struct {
 
 // RunModelTasks executes the given tasks against a single model and returns one TaskResult per task.
 // Tasks are run serially to avoid provider rate-limit issues.
+// onProgress is called after each task completes (nil-safe).
 func RunModelTasks(
 	ctx context.Context,
 	modelName string,
@@ -30,10 +35,11 @@ func RunModelTasks(
 	tasks []Task,
 	scorer *Scorer,
 	chatFn ChatFunc,
+	onProgress ProgressFunc,
 ) []TaskResult {
 	results := make([]TaskResult, 0, len(tasks))
 
-	for _, task := range tasks {
+	for i, task := range tasks {
 		select {
 		case <-ctx.Done():
 			log.Printf("benchmark: context cancelled while running tasks for model %s", modelName)
@@ -43,6 +49,10 @@ func RunModelTasks(
 
 		result := runSingleTask(ctx, modelName, modelInfo, task, scorer, chatFn)
 		results = append(results, result)
+
+		if onProgress != nil {
+			onProgress(modelName, i, len(tasks), &result)
+		}
 	}
 
 	return results

@@ -35,21 +35,51 @@ You can expect an acknowledgement within **72 hours** and a status update within
 - Never commit your `.env` file or a `providers.json` with real credentials.
 - Use the `.env.example` and `providers.example.json` templates as starting points.
 
-### Admin API Key (`ADMIN_API_KEY`)
+### Authentication
 
-- The `POST /models/update` endpoint is protected by the `X-API-Key` header.
-- Set a strong, randomly generated value for `ADMIN_API_KEY` in production.
-- The default fallback in `scripts/update_models.sh` (`admin-key-12345`) is for **local development only** — never use it in a networked or production environment.
+PiPiMink enforces authentication at three levels:
+
+| Level | Who | How |
+| ----- | --- | --- |
+| **Public** | Anyone | `GET /admin/status`, `GET /auth/login`, `GET /auth/callback` — no credentials required |
+| **User** | Authenticated users | Valid session cookie or `Authorization: Bearer ppm_<token>` header |
+| **Admin** | Admin users / scripts | `X-API-Key: <ADMIN_API_KEY>` header, or an admin session/Bearer token |
+
+Auth is enforced centrally by `cmd/server/auth_middleware.go` — individual handlers do not perform their own auth checks.
+
+PiPiMink supports three authentication modes:
+
+- **OAuth2/OIDC via Authentik** (recommended for production) — users authenticate through Authentik; sessions are managed with encrypted cookies.
+- **Bearer tokens** — programmatic API access without a browser flow. Tokens use the `ppm_` prefix and are stored as SHA-256 hashes — the plaintext is shown only once at creation and is never stored. Rotate tokens regularly and revoke any that are no longer needed.
+- **X-API-Key header** — backward-compatible fallback for admin endpoints and scripts. Set a strong, randomly generated value for `ADMIN_API_KEY`.
+- **Passthrough** — when no OAuth provider is configured and no API key is sent, all requests pass through. This legacy mode is **not suitable for internet-facing deployments**.
+
+**Recommended production settings:**
+
+```env
+REQUIRE_AUTH_FOR_CHAT=true   # require auth for /chat, /v1/chat/completions, /api/chat
+ADMIN_API_KEY=<strong-random-value>
+SESSION_SECRET=<64-byte-hex-string>
+```
+
+The default fallback in `scripts/update_models.sh` (`admin-key-12345`) is for **local development only** — never use it in a networked or production environment.
+
+### Session Security
+
+- Set `SESSION_SECRET` to a 64-byte hex string in production. If unset, a random key is generated at startup and sessions will not survive a restart.
+- Session cookies are `HttpOnly` and `SameSite=Lax`.
+- In production, place PiPiMink behind a TLS-terminating reverse proxy so that session cookies are transmitted securely.
 
 ### Docker / Database Credentials
 
 - The `docker-compose.yml` files ship with example credentials (`user:password`, `admin:admin`) intended for local development only.
-- For any internet-facing deployment, replace all database and pgAdmin credentials with strong, unique values — ideally passed via environment variables or Docker secrets.
+- The `docker-compose-authentik.yml` ships with default credentials (`AUTHENTIK_SECRET_KEY`, PostgreSQL password) that must be changed for any networked deployment.
+- For any internet-facing deployment, replace all database, pgAdmin, and Authentik credentials with strong, unique values — ideally passed via environment variables or Docker secrets.
 
 ### Network Exposure
 
 - By default PiPiMink listens on `0.0.0.0:8080`. In production, place it behind a reverse proxy (nginx, Caddy, Traefik) with TLS.
-- The pgAdmin interface (port 5050) should never be exposed to the public internet.
+- The pgAdmin interface (port 5050) and Authentik admin interface (port 9000) should never be exposed to the public internet.
 
 ### Secret Scanning
 

@@ -43,9 +43,11 @@ func (c *Client) resolvedSelectionProvider() (config.ProviderConfig, bool) {
 
 // DecideModelBasedOnCapabilities analyzes a message and determines the best model to use
 // based on model capabilities (strengths and weaknesses).
-func (c *Client) DecideModelBasedOnCapabilities(message string, availableModels map[string]models.ModelInfo) (string, error) {
+func (c *Client) DecideModelBasedOnCapabilities(message string, availableModels map[string]models.ModelInfo) (models.RoutingResult, error) {
 	// Start timing the execution
 	startTime := time.Now()
+
+	selectionModel := c.selectionModel()
 
 	cacheKey, cacheKeyErr := buildDecisionCacheKey(message, availableModels)
 	if cacheKeyErr != nil {
@@ -60,7 +62,12 @@ func (c *Client) DecideModelBasedOnCapabilities(message string, availableModels 
 			}
 			log.Printf("Routing decision cache summary: hits=%d misses=%d expired=%d sets=%d evictions=%d hit_rate=%.2f%%", stats.Hits, stats.Misses, stats.Expired, stats.Sets, stats.Evictions, hitRate)
 		}
-		return model, nil
+		return models.RoutingResult{
+			ModelName:        model,
+			CacheHit:         true,
+			EvaluatorModel:   selectionModel,
+			EvaluationTimeMs: time.Since(startTime).Milliseconds(),
+		}, nil
 	} else {
 		log.Printf("Routing decision cache %s for prompt", status)
 		if stats, emit := c.decisionCache.maybeStatsSummary(); emit {
@@ -76,10 +83,23 @@ func (c *Client) DecideModelBasedOnCapabilities(message string, availableModels 
 	log.Printf("Starting model decision process for message: %.100s...", message)
 	log.Printf("Available models count: %d", len(availableModels))
 
+	errResult := func(err error) (models.RoutingResult, error) {
+		return models.RoutingResult{EvaluatorModel: selectionModel}, err
+	}
+	fallbackResult := func(err error) (models.RoutingResult, error) {
+		fb := c.fallbackModel()
+		return models.RoutingResult{
+			ModelName:        fb,
+			EvaluatorModel:   selectionModel,
+			EvaluationTimeMs: time.Since(startTime).Milliseconds(),
+			FallbackUsed:     true,
+		}, err
+	}
+
 	// Use the configured selection provider for routing decisions (with per-model overrides).
 	selProvider, hasSP := c.resolvedSelectionProvider()
 	if !hasSP {
-		return "", fmt.Errorf("no selection provider configured")
+		return errResult(fmt.Errorf("no selection provider configured"))
 	}
 	client := &http.Client{Timeout: selProvider.Timeout}
 
@@ -116,7 +136,7 @@ func (c *Client) DecideModelBasedOnCapabilities(message string, availableModels 
 
 	modelCapabilitiesJSON, err := json.Marshal(modelCapabilities)
 	if err != nil {
-		return "", fmt.Errorf("error marshalling model capabilities: %w", err)
+		return errResult(fmt.Errorf("error marshalling model capabilities: %w", err))
 	}
 
 	// Build the system message. Mention benchmark scores and latency when present.
@@ -153,7 +173,6 @@ func (c *Client) DecideModelBasedOnCapabilities(message string, availableModels 
 	)
 
 	// Create the request payload with temperature=0 for consistent responses
-	selectionModel := c.selectionModel()
 	fallbackModel := c.fallbackModel()
 
 	var jsonPayload []byte
@@ -184,13 +203,13 @@ func (c *Client) DecideModelBasedOnCapabilities(message string, availableModels 
 		endpoint = selProvider.ChatCompletionsURL()
 	}
 	if err != nil {
-		return "", fmt.Errorf("error marshalling payload: %w", err)
+		return errResult(fmt.Errorf("error marshalling payload: %w", err))
 	}
 
 	// Create and send the HTTP request
 	req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(jsonPayload))
 	if err != nil {
-		return "", fmt.Errorf("error creating request: %w", err)
+		return errResult(fmt.Errorf("error creating request: %w", err))
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -209,7 +228,7 @@ func (c *Client) DecideModelBasedOnCapabilities(message string, availableModels 
 	log.Printf("Sending model selection request to %s (type: %s)", endpoint, selProvider.Type)
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("error making request: %w", err)
+		return errResult(fmt.Errorf("error making request: %w", err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -217,7 +236,7 @@ func (c *Client) DecideModelBasedOnCapabilities(message string, availableModels 
 	var responseBody bytes.Buffer
 	_, err = responseBody.ReadFrom(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("error reading response body: %w", err)
+		return errResult(fmt.Errorf("error reading response body: %w", err))
 	}
 
 	// Log the raw response for debugging purposes
@@ -230,12 +249,12 @@ func (c *Client) DecideModelBasedOnCapabilities(message string, availableModels 
 	case config.ProviderTypeAnthropic:
 		content, err = extractAnthropicContent(responseBody.Bytes())
 		if err != nil {
-			return "", fmt.Errorf("error extracting content from Anthropic response: %w", err)
+			return errResult(fmt.Errorf("error extracting content from Anthropic response: %w", err))
 		}
 	default:
 		content, err = extractOpenAISelectionContent(responseBody.Bytes())
 		if err != nil {
-			return "", err
+			return errResult(err)
 		}
 	}
 
@@ -246,50 +265,76 @@ func (c *Client) DecideModelBasedOnCapabilities(message string, availableModels 
 	jsonEnd := strings.LastIndex(content, "}")
 	if jsonStart == -1 || jsonEnd == -1 || jsonEnd <= jsonStart {
 		log.Printf("Error: No valid JSON object found in response content")
-		return fallbackModel, fmt.Errorf("error extracting JSON from response")
+		return fallbackResult(fmt.Errorf("error extracting JSON from response"))
 	}
 
 	jsonContent := content[jsonStart : jsonEnd+1]
 	var modelSelection map[string]interface{}
 	if err := json.Unmarshal([]byte(jsonContent), &modelSelection); err != nil {
 		log.Printf("Error parsing JSON from response: %v", err)
-		return fallbackModel, fmt.Errorf("error parsing JSON from response: %w", err)
+		return fallbackResult(fmt.Errorf("error parsing JSON from response: %w", err))
 	}
 
 	selectedModel, ok := modelSelection["modelname"].(string)
 	if !ok {
 		log.Printf("Error: 'modelname' field missing or not a string in JSON. JSON keys: %v", getMapKeys(modelSelection))
-		return fallbackModel, fmt.Errorf("error extracting modelname from JSON")
+		return fallbackResult(fmt.Errorf("error extracting modelname from JSON"))
 	}
 
-	reasonStr, ok := modelSelection["reason"].(string)
-	if ok {
+	reasonStr, _ := modelSelection["reason"].(string)
+	if reasonStr != "" {
 		log.Printf("Model selection reason: %s", reasonStr)
 	} else {
 		log.Printf("Warning: No reason provided for model selection")
 	}
 
+	// Extract matching_tags and tag_relevance from the response
+	var matchingTags []string
+	if rawTags, ok := modelSelection["matching_tags"].([]interface{}); ok {
+		for _, t := range rawTags {
+			if s, ok := t.(string); ok {
+				matchingTags = append(matchingTags, s)
+			}
+		}
+	}
+	tagRelevance := make(map[string]float64)
+	if rawRelevance, ok := modelSelection["tag_relevance"].(map[string]interface{}); ok {
+		for k, v := range rawRelevance {
+			if f, ok := v.(float64); ok {
+				tagRelevance[k] = f
+			}
+		}
+	}
+
 	selectedModel = strings.TrimSpace(selectedModel)
 	log.Printf("Extracted model name: '%s'", selectedModel)
+
+	evalTimeMs := time.Since(startTime).Milliseconds()
 
 	// Ensure the selected model is valid
 	if _, exists := availableModels[selectedModel]; !exists {
 		log.Printf("Selected model '%s' is not in available models, using default", selectedModel)
-		elapsedTime := time.Since(startTime)
-		log.Printf("Model selection with %s took %v to evaluate the prompt", selectionModel, elapsedTime)
+		log.Printf("Model selection with %s took %v to evaluate the prompt", selectionModel, time.Since(startTime))
 		if cacheKeyErr == nil {
 			c.decisionCache.set(cacheKey, fallbackModel)
 		}
-		return fallbackModel, nil
+		return fallbackResult(nil)
 	}
 
 	log.Printf("Successfully selected model based on capabilities: %s", selectedModel)
 	if cacheKeyErr == nil {
 		c.decisionCache.set(cacheKey, selectedModel)
 	}
-	elapsedTime := time.Since(startTime)
-	log.Printf("Model selection with %s took %v to evaluate the prompt", selectionModel, elapsedTime)
-	return selectedModel, nil
+	log.Printf("Model selection with %s took %v to evaluate the prompt", selectionModel, time.Since(startTime))
+
+	return models.RoutingResult{
+		ModelName:        selectedModel,
+		Reason:           reasonStr,
+		MatchingTags:     matchingTags,
+		TagRelevance:     tagRelevance,
+		EvaluatorModel:   selectionModel,
+		EvaluationTimeMs: evalTimeMs,
+	}, nil
 }
 
 // extractOpenAISelectionContent extracts the text content from an OpenAI-compatible

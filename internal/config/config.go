@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -28,6 +29,7 @@ type ModelConfig struct {
 	ChatPath  string `json:"chat_path,omitempty"`   // Overrides provider-level chat_path for this model
 	Type      string `json:"type,omitempty"`        // Overrides provider type for this model (e.g. "anthropic")
 	BaseURL   string `json:"base_url,omitempty"`    // Overrides provider base_url for this model
+	Enabled   bool   `json:"enabled"`               // Whether this model config is active (default true)
 }
 
 // ProviderConfig holds the configuration for a single LLM provider endpoint.
@@ -44,6 +46,7 @@ type ProviderConfig struct {
 	RateLimitSeconds int           `json:"rate_limit_seconds"`      // Minimum seconds between requests (0 = unlimited)
 	Models           []string      `json:"models"`                  // Simple static model list (no per-model overrides)
 	ModelConfigs     []ModelConfig `json:"model_configs,omitempty"` // Per-model overrides; drives the model list when set
+	Enabled          bool          `json:"enabled"`                 // Whether this provider is active (default true)
 }
 
 // ModelNames returns the list of model names for this provider.
@@ -92,6 +95,11 @@ func (p ProviderConfig) ChatCompletionsURL() string {
 	return p.BaseURL + "/v1/chat/completions"
 }
 
+// OAuthEnabled returns true when all required OAuth fields are configured.
+func (c *Config) OAuthEnabled() bool {
+	return c.OAuthIssuerURL != "" && c.OAuthClientID != "" && c.OAuthClientSecret != ""
+}
+
 // Config holds all configuration for the application.
 type Config struct {
 	// Provider configuration — loaded from providers.json
@@ -138,6 +146,16 @@ type Config struct {
 	TrustedProxies   []string
 	MaxRequestSize   int64
 	RateLimitEnabled bool
+
+	// OAuth / OIDC
+	OAuthIssuerURL     string
+	OAuthClientID      string
+	OAuthClientSecret  string
+	OAuthRedirectURL   string
+	OAuthScopes        string // space-separated, default "openid profile email groups"
+	OAuthAutoProvision  bool
+	SessionSecret       string // 32-byte hex key for cookie encryption
+	RequireAuthForChat  bool   // when true, chat/API endpoints require authentication
 }
 
 // Load loads configuration from .env file, environment variables, and providers.json.
@@ -206,6 +224,14 @@ func Load() (*Config, error) {
 		DatabaseMaxConnections:         getEnvInt("DATABASE_MAX_CONNECTIONS", 25),
 		DatabaseMaxIdleConnections:     getEnvInt("DATABASE_MAX_IDLE_CONNECTIONS", 5),
 		DatabaseConnectionMaxLifetime:  parseDurationEnv("DATABASE_CONNECTION_MAX_LIFETIME", 30*time.Minute),
+		OAuthIssuerURL:                 getEnv("OAUTH_ISSUER_URL", ""),
+		OAuthClientID:                  getEnv("OAUTH_CLIENT_ID", ""),
+		OAuthClientSecret:              getEnv("OAUTH_CLIENT_SECRET", ""),
+		OAuthRedirectURL:               getEnv("OAUTH_REDIRECT_URL", ""),
+		OAuthScopes:                    getEnv("OAUTH_SCOPES", "openid profile email groups"),
+		OAuthAutoProvision:             getEnvBool("OAUTH_AUTO_PROVISION", true),
+		SessionSecret:                  getEnv("SESSION_SECRET", ""),
+		RequireAuthForChat:             getEnvBool("REQUIRE_AUTH_FOR_CHAT", false),
 	}
 
 	// Load providers from providers.json (optional — fall back to built-in defaults)
@@ -231,48 +257,109 @@ func loadProviders(dir string) []ProviderConfig {
 		return defaultProviders()
 	}
 
-	for i := range providers {
-		p := &providers[i]
-
-		// Resolve provider-level API key from env
-		if p.APIKeyEnv != "" {
-			p.APIKey = os.Getenv(p.APIKeyEnv)
-			if p.APIKey == "" {
-				log.Printf("Warning: provider %q: API key not set (check env configuration)", p.Name)
+	// Detect which providers/model configs have an explicit "enabled" field set.
+	// Go unmarshals missing bools as false, so we need a two-pass approach to
+	// default Enabled to true when the field is absent from JSON.
+	var rawProviders []json.RawMessage
+	if err := json.Unmarshal(data, &rawProviders); err == nil {
+		for i, raw := range rawProviders {
+			if i >= len(providers) {
+				break
 			}
-		}
-
-		// Resolve per-model API keys from env
-		for j := range p.ModelConfigs {
-			mc := &p.ModelConfigs[j]
-			if mc.APIKeyEnv != "" {
-				mc.APIKey = os.Getenv(mc.APIKeyEnv)
-				if mc.APIKey == "" {
-					log.Printf("Warning: provider %q model %q: API key not set (check env configuration)", p.Name, mc.Name)
+			if !jsonHasKey(raw, "enabled") {
+				providers[i].Enabled = true
+			}
+			// Check model configs for explicit enabled field
+			var mc struct {
+				ModelConfigs []json.RawMessage `json:"model_configs"`
+			}
+			if err := json.Unmarshal(raw, &mc); err == nil {
+				for j, rawMC := range mc.ModelConfigs {
+					if j < len(providers[i].ModelConfigs) && !jsonHasKey(rawMC, "enabled") {
+						providers[i].ModelConfigs[j].Enabled = true
+					}
 				}
 			}
 		}
+	}
 
-		// Parse timeout
-		if p.TimeoutStr != "" {
-			if d, err := time.ParseDuration(p.TimeoutStr); err == nil {
-				p.Timeout = d
-			} else {
-				log.Printf("Warning: provider %q has invalid timeout %q, using 2m", p.Name, p.TimeoutStr)
-				p.Timeout = 2 * time.Minute
-			}
-		} else {
-			p.Timeout = 2 * time.Minute
-		}
-
-		// Default type
-		if p.Type == "" {
-			p.Type = ProviderTypeOpenAICompatible
-		}
+	for i := range providers {
+		ResolveProviderKeys(&providers[i])
 	}
 
 	log.Printf("Loaded %d provider(s) from providers.json", len(providers))
 	return providers
+}
+
+// jsonHasKey checks whether a JSON object contains a given top-level key.
+func jsonHasKey(raw json.RawMessage, key string) bool {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return false
+	}
+	_, ok := m[key]
+	return ok
+}
+
+// ResolveProviderKeys resolves API keys from environment variables for a provider
+// and its model configs, parses the timeout string, and sets default type.
+func ResolveProviderKeys(p *ProviderConfig) {
+	// Resolve provider-level API key from env
+	if p.APIKeyEnv != "" {
+		p.APIKey = os.Getenv(p.APIKeyEnv)
+		if p.APIKey == "" {
+			log.Printf("Warning: provider %q: API key not set (check env configuration)", p.Name)
+		}
+	}
+
+	// Resolve per-model API keys from env
+	for j := range p.ModelConfigs {
+		mc := &p.ModelConfigs[j]
+		if mc.APIKeyEnv != "" {
+			mc.APIKey = os.Getenv(mc.APIKeyEnv)
+			if mc.APIKey == "" {
+				log.Printf("Warning: provider %q model %q: API key not set (check env configuration)", p.Name, mc.Name)
+			}
+		}
+	}
+
+	// Parse timeout
+	if p.TimeoutStr != "" {
+		if d, err := time.ParseDuration(p.TimeoutStr); err == nil {
+			p.Timeout = d
+		} else {
+			log.Printf("Warning: provider %q has invalid timeout %q, using 2m", p.Name, p.TimeoutStr)
+			p.Timeout = 2 * time.Minute
+		}
+	} else {
+		p.Timeout = 2 * time.Minute
+	}
+
+	// Default type
+	if p.Type == "" {
+		p.Type = ProviderTypeOpenAICompatible
+	}
+}
+
+// SaveProviders writes the provider list to providers.json in the given directory.
+// The write is atomic: data is written to a temp file then renamed.
+func SaveProviders(dir string, providers []ProviderConfig) error {
+	data, err := json.MarshalIndent(providers, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal providers: %w", err)
+	}
+	data = append(data, '\n')
+
+	path := filepath.Join(dir, "providers.json")
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0644); err != nil {
+		return fmt.Errorf("write temp file: %w", err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return fmt.Errorf("rename temp file: %w", err)
+	}
+	return nil
 }
 
 // defaultProviders returns a minimal provider list used when providers.json is absent.
@@ -289,6 +376,7 @@ func defaultProviders() []ProviderConfig {
 			APIKeyEnv: "OPENAI_API_KEY",
 			APIKey:    apiKey,
 			Timeout:   2 * time.Minute,
+			Enabled:   true,
 		},
 	}
 }

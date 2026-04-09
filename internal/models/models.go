@@ -19,6 +19,18 @@ type ChatResponse struct {
 	Model    string `json:"model"`
 }
 
+// RoutingResult captures the full metadata from a routing decision.
+type RoutingResult struct {
+	ModelName        string             `json:"modelName"`
+	Reason           string             `json:"reason"`
+	MatchingTags     []string           `json:"matchingTags"`
+	TagRelevance     map[string]float64 `json:"tagRelevance"`
+	EvaluatorModel   string             `json:"evaluatorModel"`
+	EvaluationTimeMs int64              `json:"evaluationTimeMs"`
+	CacheHit         bool               `json:"cacheHit"`
+	FallbackUsed     bool               `json:"fallbackUsed"`
+}
+
 // ModelInfo represents information about a model
 type ModelInfo struct {
 	Source          string             `json:"source"`                     // Source of the model (e.g., "openai", "local")
