@@ -24,38 +24,24 @@ const (
 )
 
 // initOAuth sets up the OIDC provider and OAuth2 config if configured.
-// Called once at server start.
+// Called once at server start. Retries OIDC discovery up to 6 times with
+// 5-second intervals to handle slow-starting identity providers (e.g. Authentik).
 func (s *Server) initOAuth() {
 	if !s.config.OAuthEnabled() {
 		log.Println("OAuth not configured — running in API-key-only mode")
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	// Set up session cookie encryption early so it's ready when OAuth completes.
+	s.initSessionCookie()
 
-	provider, err := oidc.NewProvider(ctx, s.config.OAuthIssuerURL)
-	if err != nil {
-		log.Printf("Warning: failed to discover OIDC provider at %s: %v — OAuth disabled", s.config.OAuthIssuerURL, err)
-		return
-	}
+	// Try OIDC discovery in the background with retries so the HTTP server
+	// can start accepting requests immediately (non-OAuth routes work fine).
+	go s.discoverOIDCWithRetry()
+}
 
-	scopes := strings.Fields(s.config.OAuthScopes)
-	if len(scopes) == 0 {
-		scopes = []string{oidc.ScopeOpenID, "profile", "email", "groups"}
-	}
-
-	s.oauthConfig = &oauth2.Config{
-		ClientID:     s.config.OAuthClientID,
-		ClientSecret: s.config.OAuthClientSecret,
-		RedirectURL:  s.config.OAuthRedirectURL,
-		Endpoint:     provider.Endpoint(),
-		Scopes:       scopes,
-	}
-
-	s.oidcVerifier = provider.Verifier(&oidc.Config{ClientID: s.config.OAuthClientID})
-
-	// Session cookie encryption
+// initSessionCookie configures the securecookie instance for session encoding.
+func (s *Server) initSessionCookie() {
 	var hashKey, blockKey []byte
 	if s.config.SessionSecret != "" {
 		decoded, err := hex.DecodeString(s.config.SessionSecret)
@@ -72,16 +58,67 @@ func (s *Server) initOAuth() {
 		log.Println("Warning: SESSION_SECRET not set — using random key (sessions won't survive restart)")
 	}
 	s.secureCookie = securecookie.New(hashKey, blockKey)
+}
 
-	log.Printf("OAuth configured: issuer=%s clientID=%s", s.config.OAuthIssuerURL, s.config.OAuthClientID)
+// discoverOIDCWithRetry attempts OIDC provider discovery with retries.
+func (s *Server) discoverOIDCWithRetry() {
+	const maxRetries = 6
+	const retryInterval = 5 * time.Second
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		provider, err := oidc.NewProvider(ctx, s.config.OAuthIssuerURL)
+		cancel()
+
+		if err == nil {
+			s.finalizeOAuth(provider)
+			log.Printf("OAuth configured: issuer=%s clientID=%s (attempt %d/%d)",
+				s.config.OAuthIssuerURL, s.config.OAuthClientID, attempt, maxRetries)
+			return
+		}
+
+		if attempt < maxRetries {
+			log.Printf("OIDC discovery attempt %d/%d failed: %v — retrying in %s",
+				attempt, maxRetries, err, retryInterval)
+			time.Sleep(retryInterval)
+		} else {
+			log.Printf("Warning: OIDC discovery failed after %d attempts: %v — OAuth disabled",
+				maxRetries, err)
+		}
+	}
+}
+
+// finalizeOAuth sets the oauth config and OIDC verifier once discovery succeeds.
+func (s *Server) finalizeOAuth(provider *oidc.Provider) {
+	scopes := strings.Fields(s.config.OAuthScopes)
+	if len(scopes) == 0 {
+		scopes = []string{oidc.ScopeOpenID, "profile", "email", "groups"}
+	}
+
+	s.oauthConfig = &oauth2.Config{
+		ClientID:     s.config.OAuthClientID,
+		ClientSecret: s.config.OAuthClientSecret,
+		RedirectURL:  s.config.OAuthRedirectURL,
+		Endpoint:     provider.Endpoint(),
+		Scopes:       scopes,
+	}
+
+	s.oidcVerifier = provider.Verifier(&oidc.Config{ClientID: s.config.OAuthClientID})
 }
 
 // handleAuthLogin redirects to the OAuth provider's authorization page.
 func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	if s.oauthConfig == nil {
-		http.Error(w, "OAuth not configured", http.StatusNotFound)
+		if s.config.OAuthEnabled() {
+			http.Error(w, "OAuth is configured but the identity provider is not reachable yet — please try again in a few seconds", http.StatusServiceUnavailable)
+		} else {
+			http.Error(w, "OAuth not configured", http.StatusNotFound)
+		}
 		return
 	}
+
+	isHTTPS := strings.HasPrefix(r.Header.Get("X-Forwarded-Proto"), "https") ||
+		strings.HasPrefix(s.config.OAuthRedirectURL, "https://")
 
 	state := generateRandomState()
 	http.SetCookie(w, &http.Cookie{
@@ -91,6 +128,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   300,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   isHTTPS,
 	})
 
 	http.Redirect(w, r, s.oauthConfig.AuthCodeURL(state), http.StatusFound)
@@ -200,8 +238,16 @@ func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		user.ID = "user-" + uuid.New().String()[:8]
-		user.Role = "user"
 		user.CreatedAt = now
+
+		// First user gets admin role; subsequent users get user role.
+		users, err := s.db.GetUsers()
+		if err != nil || len(users) == 0 {
+			user.Role = "admin"
+			log.Printf("First OAuth user %s granted admin role", claims.Email)
+		} else {
+			user.Role = "user"
+		}
 	}
 
 	if err := s.db.UpsertUser(user); err != nil {
@@ -241,6 +287,9 @@ func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	isHTTPS := strings.HasPrefix(r.Header.Get("X-Forwarded-Proto"), "https") ||
+		strings.HasPrefix(s.config.OAuthRedirectURL, "https://")
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    encoded,
@@ -248,6 +297,7 @@ func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   86400 * 7, // 7 days
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   isHTTPS,
 	})
 
 	http.Redirect(w, r, "/console/", http.StatusFound)
@@ -269,12 +319,14 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 
 // handleAuthMe returns the current user from the session.
 func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
+	oauthEnabled := s.config.OAuthEnabled()
+
 	user := getUserFromContext(r)
 	if user != nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"authenticated": true,
-			"oauthEnabled":  s.oauthConfig != nil,
+			"oauthEnabled":  oauthEnabled,
 			"user":          user,
 		})
 		return
@@ -285,7 +337,7 @@ func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"authenticated": true,
-			"oauthEnabled":  s.oauthConfig != nil,
+			"oauthEnabled":  oauthEnabled,
 			"user": map[string]interface{}{
 				"id":    "api-key-admin",
 				"name":  "Admin",
@@ -299,7 +351,7 @@ func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"authenticated": false,
-		"oauthEnabled":  s.oauthConfig != nil,
+		"oauthEnabled":  oauthEnabled,
 	})
 }
 

@@ -1,6 +1,9 @@
 # Authentik identity provider for PiPiMink OAuth2/OIDC authentication.
 # Start with: docker compose -f docker-compose-authentik.yml up -d
 #
+# Based on the official authentik 2026.2 compose file.
+# Redis was removed in authentik 2025.10 — only PostgreSQL is needed.
+#
 # First-run setup:
 #   1. Open http://localhost:9000/if/flow/initial-setup/
 #   2. Create an admin account
@@ -13,62 +16,62 @@
 services:
   authentik-postgres:
     container_name: authentik-postgres
-    image: postgres:16
+    image: docker.io/library/postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: authentik
       POSTGRES_PASSWORD: authentik-password
       POSTGRES_DB: authentik
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     volumes:
       - authentik-pgdata:/var/lib/postgresql/data
     networks:
       - pipimink-network
 
-  authentik-redis:
-    container_name: authentik-redis
-    image: redis:7-alpine
-    command: --save 60 1 --loglevel warning
-    restart: unless-stopped
-    volumes:
-      - authentik-redis:/data
-    networks:
-      - pipimink-network
-
   authentik-server:
     container_name: authentik-server
-    image: ghcr.io/goauthentik/server:2024.12
+    image: ghcr.io/goauthentik/server:2026.2.2
     command: server
     restart: unless-stopped
     environment:
       AUTHENTIK_SECRET_KEY: pipimink-dev-secret-key-change-in-prod
-      AUTHENTIK_REDIS__HOST: authentik-redis
       AUTHENTIK_POSTGRESQL__HOST: authentik-postgres
       AUTHENTIK_POSTGRESQL__USER: authentik
       AUTHENTIK_POSTGRESQL__PASSWORD: authentik-password
       AUTHENTIK_POSTGRESQL__NAME: authentik
     ports:
       - "9000:9000"
+      - "9443:9443"
     depends_on:
-      - authentik-postgres
-      - authentik-redis
+      authentik-postgres:
+        condition: service_healthy
+    shm_size: 512mb
     networks:
       - pipimink-network
 
   authentik-worker:
     container_name: authentik-worker
-    image: ghcr.io/goauthentik/server:2024.12
+    image: ghcr.io/goauthentik/server:2026.2.2
     command: worker
     restart: unless-stopped
     environment:
       AUTHENTIK_SECRET_KEY: pipimink-dev-secret-key-change-in-prod
-      AUTHENTIK_REDIS__HOST: authentik-redis
       AUTHENTIK_POSTGRESQL__HOST: authentik-postgres
       AUTHENTIK_POSTGRESQL__USER: authentik
       AUTHENTIK_POSTGRESQL__PASSWORD: authentik-password
       AUTHENTIK_POSTGRESQL__NAME: authentik
     depends_on:
-      - authentik-postgres
-      - authentik-redis
+      authentik-postgres:
+        condition: service_healthy
+    shm_size: 512mb
+    user: root
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - pipimink-network
 
@@ -80,5 +83,3 @@ networks:
 volumes:
   authentik-pgdata:
     name: authentik-postgres-data
-  authentik-redis:
-    name: authentik-redis-data

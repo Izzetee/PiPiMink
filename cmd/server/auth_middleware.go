@@ -109,7 +109,7 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 // isPublicPath returns true for paths that never require authentication.
 func isPublicPath(path string) bool {
 	// Specific auth flow endpoints (but NOT /auth/tokens — those require auth)
-	if path == "/auth/login" || path == "/auth/callback" || path == "/auth/logout" || path == "/auth/me" {
+	if path == "/auth/login" || path == "/auth/callback" || path == "/auth/logout" {
 		return true
 	}
 	if strings.HasPrefix(path, "/swagger/") ||
@@ -216,6 +216,11 @@ func (s *Server) requiredLevel(path, method string) authLevel {
 		if s.config.OAuthEnabled() {
 			return AuthUser
 		}
+		return AuthPublic
+	}
+
+	// /auth/me — always accessible, but middleware still identifies the caller
+	if path == "/auth/me" {
 		return AuthPublic
 	}
 

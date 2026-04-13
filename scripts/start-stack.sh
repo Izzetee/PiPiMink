@@ -15,7 +15,7 @@ else
 fi
 
 # Parse flags
-WITH_AUTHENTIK=true
+WITH_AUTHENTIK=false
 for arg in "$@"; do
 	case $arg in
 		--with-authentik)
