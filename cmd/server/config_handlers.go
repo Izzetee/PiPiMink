@@ -9,12 +9,6 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// handleConfigUI serves the benchmark/prompt configuration admin page.
-func (s *Server) handleConfigUI(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(configAdminHTML))
-}
-
 // handleGetBenchmarkTasks returns all benchmark task configs from the DB.
 func (s *Server) handleGetBenchmarkTasks(w http.ResponseWriter, r *http.Request) {
 	cfgs, err := s.db.GetBenchmarkTaskConfigs()
@@ -27,13 +21,8 @@ func (s *Server) handleGetBenchmarkTasks(w http.ResponseWriter, r *http.Request)
 }
 
 // handleUpsertBenchmarkTask creates or updates a benchmark task config.
+// Auth: admin (enforced by middleware)
 func (s *Server) handleUpsertBenchmarkTask(w http.ResponseWriter, r *http.Request) {
-	apiKey := r.Header.Get("X-API-Key")
-	if apiKey != s.config.AdminAPIKey {
-		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-		return
-	}
-
 	var cfg benchmark.BenchmarkTaskConfig
 	if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
 		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
@@ -54,13 +43,8 @@ func (s *Server) handleUpsertBenchmarkTask(w http.ResponseWriter, r *http.Reques
 }
 
 // handleDeleteBenchmarkTask deletes a task config (builtin tasks are reset to defaults).
+// Auth: admin (enforced by middleware)
 func (s *Server) handleDeleteBenchmarkTask(w http.ResponseWriter, r *http.Request) {
-	apiKey := r.Header.Get("X-API-Key")
-	if apiKey != s.config.AdminAPIKey {
-		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-		return
-	}
-
 	taskID := mux.Vars(r)["id"]
 	if taskID == "" {
 		http.Error(w, `{"error":"task id is required"}`, http.StatusBadRequest)
@@ -88,13 +72,8 @@ func (s *Server) handleGetSystemPrompts(w http.ResponseWriter, r *http.Request) 
 }
 
 // handleUpdateSystemPrompt updates the value of a single system prompt by key.
+// Auth: admin (enforced by middleware)
 func (s *Server) handleUpdateSystemPrompt(w http.ResponseWriter, r *http.Request) {
-	apiKey := r.Header.Get("X-API-Key")
-	if apiKey != s.config.AdminAPIKey {
-		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-		return
-	}
-
 	key := mux.Vars(r)["key"]
 	if key == "" {
 		http.Error(w, `{"error":"key is required"}`, http.StatusBadRequest)

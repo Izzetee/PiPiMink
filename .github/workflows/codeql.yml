@@ -29,6 +29,16 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/console/package-lock.json
+
+      - name: Build frontend (needed for go:embed)
+        run: cd web/console && npm ci && npm run build
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:

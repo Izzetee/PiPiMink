@@ -37,6 +37,12 @@ scripts/release-check.sh
 # Dependency directories
 /vendor/
 node_modules/
+
+# Frontend build output
+web/console/dist/
+!web/console/dist/.gitkeep
 # Postgres data volumes
 pgdata/
 pgadmin_data/
+# Design-OS Prompts
+product-plan/

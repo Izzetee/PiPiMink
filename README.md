@@ -124,11 +124,31 @@ PiPiMink is a drop-in proxy. Existing clients require no changes:
 | `POST /v1/chat/completions` | OpenAI-compatible (streaming supported) |
 | `GET /v1/models` | OpenAI-compatible model list |
 | `POST /api/chat`, `GET /api/tags` | Ollama-compatible |
-| `GET /admin` | Model management UI |
-| `GET /admin/config` | Benchmark task + tagging prompt editor |
+| `GET/POST /providers` | Provider CRUD |
+| `POST /models/{name}/reset`, `DELETE /models/{name}` | Model reset / full delete |
+| `GET /console/` | Console UI — models, providers, benchmarks, analytics, users |
 | `GET /metrics` | Prometheus/OpenMetrics |
 
 Clients like **Open WebUI** can connect directly using either the OpenAI-compatible or Ollama-compatible endpoint. PiPiMink will appear as a single model and route each request internally.
+
+## Authentication
+
+PiPiMink supports two authentication modes:
+
+- **API-key-only** — when no OAuth provider is configured, all requests pass through unauthenticated. The `X-API-Key` header gates admin endpoints. This is the default out-of-the-box experience.
+- **OAuth2/OIDC + Bearer tokens** — when Authentik (or another OIDC provider) is configured, the console requires a user session. Programmatic API access uses Bearer tokens created via `POST /auth/tokens`.
+
+By default, chat and inference endpoints (`/chat`, `/v1/chat/completions`, `/api/chat`) do **not** require authentication (`REQUIRE_AUTH_FOR_CHAT=false`), preserving backward compatibility with existing clients. Set `REQUIRE_AUTH_FOR_CHAT=true` in production to require a valid session or Bearer token for all chat requests.
+
+**Bearer token example:**
+
+```bash
+curl -H "Authorization: Bearer ppm_your-token" \
+  http://localhost:8080/v1/chat/completions \
+  -d '{"messages":[{"role":"user","content":"Hello"}]}'
+```
+
+See [SETUP.md](SETUP.md#authentication) for full configuration details.
 
 ## Benchmarks
 
@@ -139,6 +159,7 @@ Clients like **Open WebUI** can connect directly using either the OpenAI-compati
 | `instruction-following` | Format validator — structural checks |
 | `creative-writing` | LLM judge — multi-criteria (imagery, originality, structure, tone) |
 | `summarization` | LLM judge — multi-criteria (coverage, accuracy, conciseness, format) |
+| `coding-security` | LLM judge — multi-criteria (vulnerability identification, fix quality, security reasoning) |
 | `factual-qa` | Deterministic — substring match |
 
 LLM-judge tasks use a configurable judge model (`BENCHMARK_JUDGE_PROVIDER` / `BENCHMARK_JUDGE_MODEL`). Each criterion is scored independently on a 0–10 scale; the final score is the average across all criteria. This gives fine-grained, continuous scores rather than binary pass/fail.
@@ -150,8 +171,9 @@ Benchmark scores feed directly into routing decisions as the secondary signal af
 | Path | Purpose |
 | --- | --- |
 | `main.go` | Entry point |
-| `cmd/server/` | HTTP server, handlers, routing logic, admin UI |
+| `cmd/server/` | HTTP server, handlers, routing logic, auth middleware |
 | `internal/llm/` | Provider clients, capability tagging, model selection, routing cache |
+| `internal/config/` | Configuration loading, settings registry, `.env` management |
 | `internal/benchmark/` | Benchmark task definitions, runner, scorer |
 | `internal/database/` | PostgreSQL persistence and schema migration |
 | `internal/models/` | Domain types |
@@ -160,14 +182,12 @@ Benchmark scores feed directly into routing decisions as the secondary signal af
 ## Quick Start
 
 ```bash
-cp providers.example.json providers.json   # configure your providers
-cp .env.example .env                        # fill in API keys
 ./scripts/start-stack.sh                    # start DB + app
 ```
 
-Then open `http://localhost:8080/admin` to discover, tag, and benchmark your models.
+Open `http://localhost:8080` — the setup wizard will guide you through configuring an admin key, adding providers, and discovering models.
 
-For detailed setup instructions including Azure AI Foundry, admin UI usage, configuration reference, and local development, see **[SETUP.md](SETUP.md)**.
+For file-based configuration or advanced setups (Azure AI Foundry, Authentik OAuth, local development), see **[SETUP.md](SETUP.md)**.
 
 ## AI-Assisted Development
 

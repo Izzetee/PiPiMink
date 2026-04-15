@@ -34,6 +34,29 @@ func hasUsefulTags(tags string) bool {
 	return ok && len(strengths) > 0
 }
 
+// parseTags parses the raw tags JSON string into a structured map with
+// "strengths" and "weaknesses" string arrays. Returns a safe default if parsing fails.
+func parseTags(tags string) map[string][]string {
+	result := map[string][]string{"strengths": {}, "weaknesses": {}}
+	if tags == "" || tags == "{}" {
+		return result
+	}
+	var raw struct {
+		Strengths  []string `json:"strengths"`
+		Weaknesses []string `json:"weaknesses"`
+	}
+	if err := json.Unmarshal([]byte(tags), &raw); err != nil {
+		return result
+	}
+	if raw.Strengths != nil {
+		result["strengths"] = raw.Strengths
+	}
+	if raw.Weaknesses != nil {
+		result["weaknesses"] = raw.Weaknesses
+	}
+	return result
+}
+
 // loadModelsFromDatabase loads models from the database into the model collection
 // and enriches each ModelInfo with its benchmark scores.
 func (s *Server) loadModelsFromDatabase() error {
@@ -92,9 +115,18 @@ func (s *Server) loadModelsFromDatabase() error {
 // discoverModels queries every configured provider for its model list and registers each model
 // in the database (no-op if already present). Returns the total number of newly registered models.
 func (s *Server) discoverModels() (providers int, discovered int, err error) {
-	log.Printf("Discovering models from %d configured provider(s)", len(s.config.Providers))
+	// Copy providers under lock so concurrent CRUD doesn't race.
+	s.providerMutex.RLock()
+	providersCopy := make([]config.ProviderConfig, len(s.config.Providers))
+	copy(providersCopy, s.config.Providers)
+	s.providerMutex.RUnlock()
 
-	for _, provider := range s.config.Providers {
+	log.Printf("Discovering models from %d configured provider(s)", len(providersCopy))
+
+	for _, provider := range providersCopy {
+		if !provider.Enabled {
+			continue
+		}
 		names, listErr := s.llmClient.GetModelsByProvider(provider)
 		if listErr != nil {
 			log.Printf("discover: error listing models from provider %s: %v", provider.Name, listErr)
@@ -138,19 +170,40 @@ func (s *Server) loadTaggingPromptsFromDB() {
 // tagModels runs GetModelTags for each supplied (name, source) pair and persists the result.
 // Unknown provider names are skipped with a log message.
 func (s *Server) tagModels(targets []ModelTarget) {
+	// Initialise operation tracker.
+	s.tagOpMutex.Lock()
+	s.tagOperation = &operationState{
+		Status:    "running",
+		Total:     len(targets),
+		Completed: 0,
+		StartedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	s.tagOpMutex.Unlock()
+
 	// Apply any prompt overrides stored in the DB before tagging.
 	s.loadTaggingPromptsFromDB()
 
-	// Build provider lookup once.
+	// Build provider lookup under lock.
+	s.providerMutex.RLock()
 	providerByName := make(map[string]config.ProviderConfig, len(s.config.Providers))
 	for _, p := range s.config.Providers {
 		providerByName[p.Name] = p
 	}
+	s.providerMutex.RUnlock()
 
-	for _, t := range targets {
+	for i, t := range targets {
+		// Update current model before starting.
+		s.tagOpMutex.Lock()
+		s.tagOperation.CurrentModel = t.Name
+		s.tagOpMutex.Unlock()
+
 		p, ok := providerByName[t.Source]
 		if !ok {
 			log.Printf("tag: unknown provider %q for model %s — skipping", t.Source, t.Name)
+			s.tagOpMutex.Lock()
+			s.tagOperation.Completed = i + 1
+			s.tagOperation.FailedModels = append(s.tagOperation.FailedModels, t.Name)
+			s.tagOpMutex.Unlock()
 			continue
 		}
 
@@ -158,12 +211,18 @@ func (s *Server) tagModels(targets []ModelTarget) {
 		if err != nil {
 			log.Printf("tag: error tagging model %s (%s): %v", t.Name, t.Source, err)
 			tags = "{}"
+			s.tagOpMutex.Lock()
+			s.tagOperation.FailedModels = append(s.tagOperation.FailedModels, t.Name)
+			s.tagOpMutex.Unlock()
 		}
 		if shouldDelete {
 			log.Printf("tag: deleting non-chat model %s (%s)", t.Name, t.Source)
 			if delErr := s.db.DeleteModel(t.Name, t.Source); delErr != nil {
 				log.Printf("tag: delete error: %v", delErr)
 			}
+			s.tagOpMutex.Lock()
+			s.tagOperation.Completed = i + 1
+			s.tagOpMutex.Unlock()
 			continue
 		}
 		enabled := !shouldDisable && hasUsefulTags(tags)
@@ -172,22 +231,41 @@ func (s *Server) tagModels(targets []ModelTarget) {
 			log.Printf("tag: error saving model %s: %v", t.Name, saveErr)
 		}
 		log.Printf("tag: tagged %s (%s) enabled=%v", t.Name, t.Source, enabled)
+
+		s.tagOpMutex.Lock()
+		s.tagOperation.Completed = i + 1
+		s.tagOpMutex.Unlock()
 	}
 
 	if reloadErr := s.loadModelsFromDatabase(); reloadErr != nil {
 		log.Printf("tag: error reloading models: %v", reloadErr)
 	}
+
+	// Mark operation as completed.
+	s.tagOpMutex.Lock()
+	s.tagOperation.Status = "completed"
+	s.tagOperation.CurrentModel = ""
+	s.tagOpMutex.Unlock()
 }
 
 // fetchAndTagModels fetches models from all configured providers and tags them with capabilities.
 func (s *Server) fetchAndTagModels() error {
-	log.Printf("Fetching and tagging models from %d configured provider(s)", len(s.config.Providers))
+	// Copy providers under lock so concurrent CRUD doesn't race.
+	s.providerMutex.RLock()
+	providersCopy := make([]config.ProviderConfig, len(s.config.Providers))
+	copy(providersCopy, s.config.Providers)
+	s.providerMutex.RUnlock()
+
+	log.Printf("Fetching and tagging models from %d configured provider(s)", len(providersCopy))
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	allModels := make(map[string]models.ModelInfo)
 
-	for _, provider := range s.config.Providers {
+	for _, provider := range providersCopy {
+		if !provider.Enabled {
+			continue
+		}
 		wg.Add(1)
 		go func(p config.ProviderConfig) {
 			defer wg.Done()
@@ -271,6 +349,15 @@ func (s *Server) logModels() {
 }
 
 // loadBenchmarkTasksFromDB loads enabled task configs from the DB and converts them to []Task.
+// resolveBenchmarkJudgeName returns the configured benchmark judge model name.
+// Falls back to the model selection model if no dedicated judge is configured.
+func (s *Server) resolveBenchmarkJudgeName() string {
+	if s.config.BenchmarkJudgeModel != "" {
+		return s.config.BenchmarkJudgeModel
+	}
+	return s.config.ModelSelectionModel
+}
+
 // Falls back to the compiled-in defaults when the DB returns no rows.
 func (s *Server) loadBenchmarkTasksFromDB() []benchmark.Task {
 	cfgs, err := s.db.GetBenchmarkTaskConfigs()
@@ -310,6 +397,28 @@ func (s *Server) runBenchmarks(ctx context.Context, modelFilter, categoryFilter 
 
 	tasks := s.loadBenchmarkTasksFromDB()
 	suite := benchmark.NewSuite(s.db, s.config, chatFn).WithTasks(tasks)
+	suite.OnProgress = func(modelName string, taskIndex, totalTasks int, result *benchmark.TaskResult) {
+		s.benchmarkOpMutex.Lock()
+		defer s.benchmarkOpMutex.Unlock()
+		if s.benchmarkOperation == nil {
+			return
+		}
+		s.benchmarkOperation.CompletedTasks = taskIndex + 1
+		s.benchmarkOperation.TotalTasks = totalTasks
+		s.benchmarkOperation.CurrentTask = result.TaskID
+
+		entry := logEntry{
+			Model:    modelName,
+			Task:     result.TaskID,
+			Category: string(result.Category),
+			Score:    result.Score,
+			Ok:       result.Err == nil,
+		}
+		s.benchmarkOperation.LogEntries = append(s.benchmarkOperation.LogEntries, entry)
+		if len(s.benchmarkOperation.LogEntries) > 50 {
+			s.benchmarkOperation.LogEntries = s.benchmarkOperation.LogEntries[len(s.benchmarkOperation.LogEntries)-50:]
+		}
+	}
 	if err := suite.Run(ctx, enabledModels, categoryFilter, modelFilter); err != nil {
 		log.Printf("benchmark: run error: %v", err)
 	}

@@ -46,9 +46,10 @@ func TestDecideModelBasedOnCapabilitiesFallbackOnInvalidJSONContent(t *testing.T
 		"gpt-4-turbo": {Source: "openai", Tags: `{"strengths":["general"]}`, Enabled: true},
 	}
 
-	selectedModel, err := client.DecideModelBasedOnCapabilities("hello", availableModels)
+	result, err := client.DecideModelBasedOnCapabilities("hello", availableModels)
 	assert.Error(t, err)
-	assert.Equal(t, "gpt-4-turbo", selectedModel)
+	assert.Equal(t, "gpt-4-turbo", result.ModelName)
+	assert.True(t, result.FallbackUsed)
 }
 
 func TestDecideModelBasedOnCapabilitiesWithAnthropicProvider(t *testing.T) {
@@ -113,9 +114,9 @@ func TestDecideModelBasedOnCapabilitiesWithAnthropicProvider(t *testing.T) {
 		"gpt-4-turbo": {Source: "openai", Tags: `{"strengths":["speed","general"],"weaknesses":["complex-reasoning"]}`, Enabled: true},
 	}
 
-	model, err := client.DecideModelBasedOnCapabilities("Write a complex algorithm", availableModels)
+	result, err := client.DecideModelBasedOnCapabilities("Write a complex algorithm", availableModels)
 	assert.NoError(t, err)
-	assert.Equal(t, "gpt-4", model)
+	assert.Equal(t, "gpt-4", result.ModelName)
 }
 
 func TestDecideModelBasedOnCapabilitiesWithPerModelOverrides(t *testing.T) {
@@ -158,9 +159,9 @@ func TestDecideModelBasedOnCapabilitiesWithPerModelOverrides(t *testing.T) {
 		"gpt-4": {Source: "openai", Tags: `{"strengths":["general"]}`, Enabled: true},
 	}
 
-	model, err := client.DecideModelBasedOnCapabilities("hello", availableModels)
+	result, err := client.DecideModelBasedOnCapabilities("hello", availableModels)
 	assert.NoError(t, err)
-	assert.Equal(t, "gpt-4", model)
+	assert.Equal(t, "gpt-4", result.ModelName)
 }
 
 func TestDecideModelBasedOnCapabilitiesFallbackWhenModelNotAvailable(t *testing.T) {
@@ -183,7 +184,8 @@ func TestDecideModelBasedOnCapabilitiesFallbackWhenModelNotAvailable(t *testing.
 		"gpt-4-turbo": {Source: "openai", Tags: `{"strengths":["general"]}`, Enabled: true},
 	}
 
-	selectedModel, err := client.DecideModelBasedOnCapabilities("hello", availableModels)
+	result2, err := client.DecideModelBasedOnCapabilities("hello", availableModels)
 	assert.NoError(t, err)
-	assert.Equal(t, "gpt-4-turbo", selectedModel)
+	assert.Equal(t, "gpt-4-turbo", result2.ModelName)
+	assert.True(t, result2.FallbackUsed)
 }

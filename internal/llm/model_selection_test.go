@@ -74,9 +74,10 @@ func TestDecideModelBasedOnCapabilities(t *testing.T) {
 		}
 
 		// Test the function
-		model, err := client.DecideModelBasedOnCapabilities("Write a complex algorithm to solve the traveling salesman problem", availableModels)
+		result, err := client.DecideModelBasedOnCapabilities("Write a complex algorithm to solve the traveling salesman problem", availableModels)
 		assert.NoError(t, err)
-		assert.Equal(t, "gpt-4", model)
+		assert.Equal(t, "gpt-4", result.ModelName)
+		assert.False(t, result.CacheHit)
 	})
 
 	// Skip the test that requires actual API access

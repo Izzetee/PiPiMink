@@ -159,7 +159,8 @@ func (s *Server) handleOllamaGenerate(w http.ResponseWriter, r *http.Request) {
 
 		// Select model based on capabilities
 		var err error
-		selectedModel, err := s.llmClient.DecideModelBasedOnCapabilities(generateReq.Prompt, enabledModels)
+		routingResult, err := s.llmClient.DecideModelBasedOnCapabilities(generateReq.Prompt, enabledModels)
+		selectedModel := routingResult.ModelName
 		if err != nil {
 			log.Printf("Error deciding model: %v, falling back to default model", err)
 			selectedModel = s.getFallbackModelName(enabledModels)
@@ -306,7 +307,8 @@ func (s *Server) handleOllamaChat(w http.ResponseWriter, r *http.Request) {
 
 		// Select model based on capabilities
 		var err error
-		selectedModel, err := s.llmClient.DecideModelBasedOnCapabilities(lastUserMessage, enabledModels)
+		routingResult, err := s.llmClient.DecideModelBasedOnCapabilities(lastUserMessage, enabledModels)
+		selectedModel := routingResult.ModelName
 		if err != nil {
 			log.Printf("Error deciding model: %v, falling back to default model", err)
 			selectedModel = s.getFallbackModelName(enabledModels)
