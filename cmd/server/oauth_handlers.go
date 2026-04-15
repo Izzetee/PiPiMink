@@ -117,9 +117,6 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isHTTPS := strings.HasPrefix(r.Header.Get("X-Forwarded-Proto"), "https") ||
-		strings.HasPrefix(s.config.OAuthRedirectURL, "https://")
-
 	state := generateRandomState()
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookieName,
@@ -128,7 +125,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   300,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   isHTTPS,
+		Secure:   s.isSecureCookie(r),
 	})
 
 	http.Redirect(w, r, s.oauthConfig.AuthCodeURL(state), http.StatusFound)
@@ -158,6 +155,8 @@ func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   s.isSecureCookie(r),
 	})
 
 	// Check for OAuth error
@@ -287,9 +286,6 @@ func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isHTTPS := strings.HasPrefix(r.Header.Get("X-Forwarded-Proto"), "https") ||
-		strings.HasPrefix(s.config.OAuthRedirectURL, "https://")
-
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    encoded,
@@ -297,7 +293,7 @@ func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   86400 * 7, // 7 days
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   isHTTPS,
+		Secure:   s.isSecureCookie(r),
 	})
 
 	http.Redirect(w, r, "/console/", http.StatusFound)
@@ -311,6 +307,8 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   s.isSecureCookie(r),
 	})
 
 	w.Header().Set("Content-Type", "application/json")
@@ -367,6 +365,13 @@ func (s *Server) syncGroupsFromClaims(groupNames []string) {
 			SyncedAt: time.Now().Format(time.RFC3339),
 		})
 	}
+}
+
+// isSecureCookie reports whether cookies should be marked Secure based on
+// the X-Forwarded-Proto header or the configured OAuth redirect URL scheme.
+func (s *Server) isSecureCookie(r *http.Request) bool {
+	return strings.HasPrefix(r.Header.Get("X-Forwarded-Proto"), "https") ||
+		strings.HasPrefix(s.config.OAuthRedirectURL, "https://")
 }
 
 func generateRandomState() string {
