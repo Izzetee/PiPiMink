@@ -1,0 +1,20 @@
+# Gitleaks configuration — allowlist false positives in documentation and code.
+
+[allowlist]
+
+  # Documentation examples use placeholder Bearer tokens (ppm_your-token, ppm_your-existing-token)
+  # and placeholder X-API-Key values — these are not real secrets.
+  paths = [
+    '''README\.md''',
+    '''SETUP\.md''',
+    '''SECURITY\.md''',
+    '''CONTRIBUTING\.md''',
+    '''CHANGELOG\.md''',
+    '''CLAUDE\.md''',
+    '''\.github/copilot-instructions\.md''',
+  ]
+
+  [[allowlist.rules]]
+    # database.go column name "token_usage" triggers generic-api-key false positive
+    id = "generic-api-key"
+    path = '''internal/database/database\.go'''

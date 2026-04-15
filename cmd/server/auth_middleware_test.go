@@ -283,4 +283,3 @@ func (s *ServerTestSuite) TestAuthMiddleware_AnalyticsScopedToUser() {
 	s.server.GetRouter().ServeHTTP(s.recorder, req)
 	s.Equal(http.StatusOK, s.recorder.Code)
 }
-

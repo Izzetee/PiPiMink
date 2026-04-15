@@ -22,8 +22,8 @@ type Suite struct {
 	cfg        *config.Config
 	scorer     *Scorer
 	chatFn     ChatFunc
-	tasks      []Task        // if non-nil, overrides AllTasks() for this run
-	OnProgress ProgressFunc  // optional callback fired after each task completes
+	tasks      []Task       // if non-nil, overrides AllTasks() for this run
+	OnProgress ProgressFunc // optional callback fired after each task completes
 }
 
 // JudgeModel returns the name of the LLM judge model configured for this suite.

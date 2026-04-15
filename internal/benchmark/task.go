@@ -283,9 +283,9 @@ The function returns wrong results for lists containing only negative numbers. P
 			},
 		},
 		{
-			ID:       "coding-csharp-hard-expression-parser",
-			Category: CategoryCoding,
-			Prompt: `Write a C# class ExpressionEvaluator with a method public static double Evaluate(string expression) that parses and evaluates a mathematical expression string supporting: +, -, *, / operators, parentheses for grouping, unary minus (e.g., "-3" or "(-5+2)"), and correct operator precedence (* and / before + and -). Examples: "2+3*4" → 14, "(2+3)*4" → 20, "-3+5" → 2, "10/(2+3)" → 2. Throw FormatException for malformed input and DivideByZeroException for division by zero. Provide only the class.`,
+			ID:            "coding-csharp-hard-expression-parser",
+			Category:      CategoryCoding,
+			Prompt:        `Write a C# class ExpressionEvaluator with a method public static double Evaluate(string expression) that parses and evaluates a mathematical expression string supporting: +, -, *, / operators, parentheses for grouping, unary minus (e.g., "-3" or "(-5+2)"), and correct operator precedence (* and / before + and -). Examples: "2+3*4" → 14, "(2+3)*4" → 20, "-3+5" → 2, "10/(2+3)" → 2. Throw FormatException for malformed input and DivideByZeroException for division by zero. Provide only the class.`,
 			ScoringMethod: ScoringLLMJudge,
 			JudgeCriteria: []JudgeCriterion{
 				{Name: "Correctness", Description: "Correctly evaluates expressions respecting operator precedence and parentheses; handles nested parentheses like '((2+3)*4)/2' → 10; unary minus works in all positions"},
@@ -359,9 +359,9 @@ The function returns wrong results for lists containing only negative numbers. P
 			},
 		},
 		{
-			ID:       "coding-rust-hard-async-rate-limiter",
-			Category: CategoryCoding,
-			Prompt: `Write a Rust async rate limiter using tokio. Define struct RateLimiter implementing a token bucket algorithm with: async fn new(rate: f64, burst: usize) -> Self where rate is tokens per second and burst is max tokens, async fn acquire(&self) that waits until a token is available, and fn try_acquire(&self) -> bool that returns immediately. The limiter must be safe to share across tokio tasks (Send + Sync). Provide the struct, impl, and a brief tokio::main example showing 5 tasks sharing one limiter. Use only tokio and std — no external rate-limiting crates.`,
+			ID:            "coding-rust-hard-async-rate-limiter",
+			Category:      CategoryCoding,
+			Prompt:        `Write a Rust async rate limiter using tokio. Define struct RateLimiter implementing a token bucket algorithm with: async fn new(rate: f64, burst: usize) -> Self where rate is tokens per second and burst is max tokens, async fn acquire(&self) that waits until a token is available, and fn try_acquire(&self) -> bool that returns immediately. The limiter must be safe to share across tokio tasks (Send + Sync). Provide the struct, impl, and a brief tokio::main example showing 5 tasks sharing one limiter. Use only tokio and std — no external rate-limiting crates.`,
 			ScoringMethod: ScoringLLMJudge,
 			JudgeCriteria: []JudgeCriterion{
 				{Name: "Correctness", Description: "Token bucket algorithm is correctly implemented: tokens replenish at the specified rate up to burst capacity; acquire blocks when no tokens available; try_acquire is non-blocking"},
@@ -385,9 +385,9 @@ The function returns wrong results for lists containing only negative numbers. P
 			},
 		},
 		{
-			ID:       "coding-java-medium-stream-pipeline",
-			Category: CategoryCoding,
-			Prompt: `Write a Java class TransactionAnalyzer with a record record Transaction(String customer, String category, double amount, LocalDate date) and the following static methods using Java Streams: (1) Map<String, Double> totalByCustomer(List<Transaction> txns) — total amount per customer, (2) Optional<Transaction> largestInCategory(List<Transaction> txns, String category) — highest amount transaction in a category, (3) Map<String, List<Transaction>> topNByCategory(List<Transaction> txns, int n) — top n transactions by amount per category. Use Java 17+ features. Provide only the class.`,
+			ID:            "coding-java-medium-stream-pipeline",
+			Category:      CategoryCoding,
+			Prompt:        `Write a Java class TransactionAnalyzer with a record record Transaction(String customer, String category, double amount, LocalDate date) and the following static methods using Java Streams: (1) Map<String, Double> totalByCustomer(List<Transaction> txns) — total amount per customer, (2) Optional<Transaction> largestInCategory(List<Transaction> txns, String category) — highest amount transaction in a category, (3) Map<String, List<Transaction>> topNByCategory(List<Transaction> txns, int n) — top n transactions by amount per category. Use Java 17+ features. Provide only the class.`,
 			ScoringMethod: ScoringLLMJudge,
 			JudgeCriteria: []JudgeCriterion{
 				{Name: "Correctness", Description: "totalByCustomer sums correctly across duplicate customers; largestInCategory returns Optional.empty for unknown category; topNByCategory returns at most n items per category sorted by amount descending"},
@@ -397,9 +397,9 @@ The function returns wrong results for lists containing only negative numbers. P
 			},
 		},
 		{
-			ID:       "coding-java-hard-lock-free-queue",
-			Category: CategoryCoding,
-			Prompt: `Write a Java generic lock-free concurrent queue public class LockFreeQueue<T> using AtomicReference and CAS operations (compare-and-swap). Implement: void enqueue(T item), T dequeue() (returns null if empty), boolean isEmpty(). Use the Michael-Scott algorithm with a sentinel node. The queue must be safe for multiple producer and multiple consumer threads without any locks or synchronized blocks. Provide only the class.`,
+			ID:            "coding-java-hard-lock-free-queue",
+			Category:      CategoryCoding,
+			Prompt:        `Write a Java generic lock-free concurrent queue public class LockFreeQueue<T> using AtomicReference and CAS operations (compare-and-swap). Implement: void enqueue(T item), T dequeue() (returns null if empty), boolean isEmpty(). Use the Michael-Scott algorithm with a sentinel node. The queue must be safe for multiple producer and multiple consumer threads without any locks or synchronized blocks. Provide only the class.`,
 			ScoringMethod: ScoringLLMJudge,
 			JudgeCriteria: []JudgeCriterion{
 				{Name: "Correctness", Description: "Michael-Scott algorithm is correctly implemented: enqueue appends to tail with CAS on next pointer, dequeue advances head with CAS; sentinel node separates head and tail; linearizable"},
@@ -411,9 +411,9 @@ The function returns wrong results for lists containing only negative numbers. P
 
 		// ── TypeScript ──
 		{
-			ID:       "coding-typescript-easy-type-safe-emitter",
-			Category: CategoryCoding,
-			Prompt: `Write a TypeScript class TypedEmitter<Events extends Record<string, unknown[]>> that provides type-safe event emitting. Implement: on<K extends keyof Events>(event: K, listener: (...args: Events[K]) => void): void, off<K extends keyof Events>(event: K, listener: (...args: Events[K]) => void): void, and emit<K extends keyof Events>(event: K, ...args: Events[K]): void. Include a usage example showing: type MyEvents = { message: [string, number]; close: [] }; const emitter = new TypedEmitter<MyEvents>(). Provide the class and example.`,
+			ID:            "coding-typescript-easy-type-safe-emitter",
+			Category:      CategoryCoding,
+			Prompt:        `Write a TypeScript class TypedEmitter<Events extends Record<string, unknown[]>> that provides type-safe event emitting. Implement: on<K extends keyof Events>(event: K, listener: (...args: Events[K]) => void): void, off<K extends keyof Events>(event: K, listener: (...args: Events[K]) => void): void, and emit<K extends keyof Events>(event: K, ...args: Events[K]): void. Include a usage example showing: type MyEvents = { message: [string, number]; close: [] }; const emitter = new TypedEmitter<MyEvents>(). Provide the class and example.`,
 			ScoringMethod: ScoringLLMJudge,
 			JudgeCriteria: []JudgeCriterion{
 				{Name: "Correctness", Description: "Events are fully type-safe: emitting 'message' requires (string, number) args; 'close' requires no args; listeners receive correctly typed parameters; on/off/emit work correctly at runtime"},
@@ -423,9 +423,9 @@ The function returns wrong results for lists containing only negative numbers. P
 			},
 		},
 		{
-			ID:       "coding-typescript-medium-schema-validator",
-			Category: CategoryCoding,
-			Prompt: `Write a TypeScript runtime schema validator inspired by Zod. Define a builder API: S.string(), S.number(), S.boolean(), S.object({...}), S.array(schema), and S.optional(schema). Each schema must have .parse(input: unknown): T that returns the typed value or throws, and .safeParse(input: unknown): { success: true, data: T } | { success: false, error: string }. The type T must be inferred from the schema — no manual type annotation. For example: const userSchema = S.object({ name: S.string(), age: S.number() }); type User = Infer<typeof userSchema> should yield { name: string; age: number }. Provide the implementation.`,
+			ID:            "coding-typescript-medium-schema-validator",
+			Category:      CategoryCoding,
+			Prompt:        `Write a TypeScript runtime schema validator inspired by Zod. Define a builder API: S.string(), S.number(), S.boolean(), S.object({...}), S.array(schema), and S.optional(schema). Each schema must have .parse(input: unknown): T that returns the typed value or throws, and .safeParse(input: unknown): { success: true, data: T } | { success: false, error: string }. The type T must be inferred from the schema — no manual type annotation. For example: const userSchema = S.object({ name: S.string(), age: S.number() }); type User = Infer<typeof userSchema> should yield { name: string; age: number }. Provide the implementation.`,
 			ScoringMethod: ScoringLLMJudge,
 			JudgeCriteria: []JudgeCriterion{
 				{Name: "Correctness", Description: "All primitive validators correctly check typeof; object validator checks all keys recursively; array validator checks each element; optional allows undefined; parse throws on invalid, safeParse returns discriminated union"},
@@ -435,9 +435,9 @@ The function returns wrong results for lists containing only negative numbers. P
 			},
 		},
 		{
-			ID:       "coding-typescript-hard-sql-query-builder",
-			Category: CategoryCoding,
-			Prompt: `Write a TypeScript type-safe SQL query builder that prevents invalid queries at compile time. Define a Table type that describes table schemas, then implement a builder with methods: .select(...columns) (only allows columns that exist in the table), .where(column, op, value) (value type must match the column's type), .join(table, on), .orderBy(column, direction), and .build() returning the SQL string. The builder must enforce that select() is called before where(), and build() is called last. Use template literal types for the SQL output type. Example: const q = db.table<UserTable>().select('name','age').where('age','>',18).build(). Provide the complete implementation.`,
+			ID:            "coding-typescript-hard-sql-query-builder",
+			Category:      CategoryCoding,
+			Prompt:        `Write a TypeScript type-safe SQL query builder that prevents invalid queries at compile time. Define a Table type that describes table schemas, then implement a builder with methods: .select(...columns) (only allows columns that exist in the table), .where(column, op, value) (value type must match the column's type), .join(table, on), .orderBy(column, direction), and .build() returning the SQL string. The builder must enforce that select() is called before where(), and build() is called last. Use template literal types for the SQL output type. Example: const q = db.table<UserTable>().select('name','age').where('age','>',18).build(). Provide the complete implementation.`,
 			ScoringMethod: ScoringLLMJudge,
 			JudgeCriteria: []JudgeCriterion{
 				{Name: "Correctness", Description: "Select only allows valid column names from the table schema; where enforces value type matches column type; builder produces valid SQL strings; method chaining works correctly"},
@@ -461,9 +461,9 @@ The function returns wrong results for lists containing only negative numbers. P
 			},
 		},
 		{
-			ID:       "coding-python-medium-decorator-retry",
-			Category: CategoryCoding,
-			Prompt: `Write a Python decorator retry(max_attempts: int = 3, delay: float = 1.0, backoff: float = 2.0, exceptions: tuple = (Exception,)) that retries a function on failure. It should: (1) retry up to max_attempts times, (2) wait delay seconds between retries with exponential backoff (delay *= backoff after each retry), (3) only catch the specified exception types, (4) re-raise the last exception if all attempts fail, (5) preserve the original function's name and docstring. The decorator must work with both sync functions and accept *args/**kwargs. Provide only the decorator.`,
+			ID:            "coding-python-medium-decorator-retry",
+			Category:      CategoryCoding,
+			Prompt:        `Write a Python decorator retry(max_attempts: int = 3, delay: float = 1.0, backoff: float = 2.0, exceptions: tuple = (Exception,)) that retries a function on failure. It should: (1) retry up to max_attempts times, (2) wait delay seconds between retries with exponential backoff (delay *= backoff after each retry), (3) only catch the specified exception types, (4) re-raise the last exception if all attempts fail, (5) preserve the original function's name and docstring. The decorator must work with both sync functions and accept *args/**kwargs. Provide only the decorator.`,
 			ScoringMethod: ScoringLLMJudge,
 			JudgeCriteria: []JudgeCriterion{
 				{Name: "Correctness", Description: "Retries exactly max_attempts times; exponential backoff is applied correctly (delay, delay*backoff, delay*backoff^2); only catches specified exceptions; re-raises on final failure"},
@@ -473,9 +473,9 @@ The function returns wrong results for lists containing only negative numbers. P
 			},
 		},
 		{
-			ID:       "coding-python-hard-metaclass-orm",
-			Category: CategoryCoding,
-			Prompt: `Write a Python mini-ORM using metaclasses. Define field descriptors StringField(max_length=None), IntField(min=None, max=None), BoolField(), and a Model base class with a ModelMeta metaclass. Models should: (1) auto-detect field definitions from class body, (2) validate types and constraints on attribute assignment, (3) provide to_dict() returning field values, (4) provide classmethod from_dict(cls, data) for construction, (5) generate a __table_name__ from the class name (CamelCase → snake_case). Example: class UserProfile(Model): name = StringField(max_length=50); age = IntField(min=0). Assignment user.age = -1 should raise ValueError. Provide the complete implementation.`,
+			ID:            "coding-python-hard-metaclass-orm",
+			Category:      CategoryCoding,
+			Prompt:        `Write a Python mini-ORM using metaclasses. Define field descriptors StringField(max_length=None), IntField(min=None, max=None), BoolField(), and a Model base class with a ModelMeta metaclass. Models should: (1) auto-detect field definitions from class body, (2) validate types and constraints on attribute assignment, (3) provide to_dict() returning field values, (4) provide classmethod from_dict(cls, data) for construction, (5) generate a __table_name__ from the class name (CamelCase → snake_case). Example: class UserProfile(Model): name = StringField(max_length=50); age = IntField(min=0). Assignment user.age = -1 should raise ValueError. Provide the complete implementation.`,
 			ScoringMethod: ScoringLLMJudge,
 			JudgeCriteria: []JudgeCriterion{
 				{Name: "Correctness", Description: "Metaclass collects field definitions; descriptors validate on __set__; StringField enforces max_length; IntField enforces min/max; to_dict and from_dict round-trip correctly; table name generation works"},

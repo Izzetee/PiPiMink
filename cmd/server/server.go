@@ -57,15 +57,15 @@ type operationState struct {
 
 // Server represents the API server
 type Server struct {
-	config           *config.Config
-	db               DatabaseInterface
-	llmClient        LLMInterface
-	router           *mux.Router
-	modelCollection  *models.ModelCollection
-	modelMutex       sync.RWMutex
-	providerMutex    sync.RWMutex
-	providerTestInfo map[string]*ProviderTestInfo
-	httpMetrics      *httpMetrics
+	config             *config.Config
+	db                 DatabaseInterface
+	llmClient          LLMInterface
+	router             *mux.Router
+	modelCollection    *models.ModelCollection
+	modelMutex         sync.RWMutex
+	providerMutex      sync.RWMutex
+	providerTestInfo   map[string]*ProviderTestInfo
+	httpMetrics        *httpMetrics
 	tagOperation       *operationState
 	tagOpMutex         sync.Mutex
 	benchmarkOperation *operationState

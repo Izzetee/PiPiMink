@@ -14,19 +14,19 @@ import (
 
 // providerResponse is the JSON shape returned for a single provider.
 type providerResponse struct {
-	Name             string                `json:"name"`
-	Type             string                `json:"type"`
-	BaseURL          string                `json:"base_url"`
-	APIKeyEnv        string                `json:"api_key_env"`
-	Timeout          string                `json:"timeout"`
-	RateLimitSeconds int                   `json:"rate_limit_seconds"`
-	Enabled          bool                  `json:"enabled"`
-	Models           []string              `json:"models"`
-	ModelConfigs     []modelConfigResponse `json:"model_configs"`
-	ModelCount       int                   `json:"model_count"`
-	LastTestedAt     *string               `json:"last_tested_at"`
-	LastTestResult   *string               `json:"last_test_result"`
-	LastTestLatencyMs *int64               `json:"last_test_latency_ms"`
+	Name              string                `json:"name"`
+	Type              string                `json:"type"`
+	BaseURL           string                `json:"base_url"`
+	APIKeyEnv         string                `json:"api_key_env"`
+	Timeout           string                `json:"timeout"`
+	RateLimitSeconds  int                   `json:"rate_limit_seconds"`
+	Enabled           bool                  `json:"enabled"`
+	Models            []string              `json:"models"`
+	ModelConfigs      []modelConfigResponse `json:"model_configs"`
+	ModelCount        int                   `json:"model_count"`
+	LastTestedAt      *string               `json:"last_tested_at"`
+	LastTestResult    *string               `json:"last_test_result"`
+	LastTestLatencyMs *int64                `json:"last_test_latency_ms"`
 }
 
 type modelConfigResponse struct {
@@ -152,14 +152,14 @@ func (s *Server) handleListProviders(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAddProvider(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
-		Name             string              `json:"name"`
-		Type             string              `json:"type"`
-		BaseURL          string              `json:"base_url"`
-		APIKeyEnv        string              `json:"api_key_env"`
-		Timeout          string              `json:"timeout"`
-		RateLimitSeconds int                 `json:"rate_limit_seconds"`
-		Enabled          bool                `json:"enabled"`
-		Models           []string            `json:"models"`
+		Name             string               `json:"name"`
+		Type             string               `json:"type"`
+		BaseURL          string               `json:"base_url"`
+		APIKeyEnv        string               `json:"api_key_env"`
+		Timeout          string               `json:"timeout"`
+		RateLimitSeconds int                  `json:"rate_limit_seconds"`
+		Enabled          bool                 `json:"enabled"`
+		Models           []string             `json:"models"`
 		ModelConfigs     []config.ModelConfig `json:"model_configs"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

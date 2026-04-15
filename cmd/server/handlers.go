@@ -1043,4 +1043,3 @@ func (s *Server) handleBenchmarkStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewEncoder(w).Encode(op)
 }
-

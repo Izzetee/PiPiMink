@@ -116,4 +116,3 @@ func (s *ServerTestSuite) TestHandleTestProvider_Error() {
 	s.Require().NoError(json.Unmarshal(s.recorder.Body.Bytes(), &resp))
 	s.Equal("error", resp["result"])
 }
-

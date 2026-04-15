@@ -153,9 +153,9 @@ type Config struct {
 	OAuthClientSecret  string
 	OAuthRedirectURL   string
 	OAuthScopes        string // space-separated, default "openid profile email groups"
-	OAuthAutoProvision  bool
-	SessionSecret       string // Hex-encoded key for session cookie encryption; 128 hex chars (64 bytes) recommended
-	RequireAuthForChat  bool   // when true, chat/API endpoints require authentication
+	OAuthAutoProvision bool
+	SessionSecret      string // Hex-encoded key for session cookie encryption; 128 hex chars (64 bytes) recommended
+	RequireAuthForChat bool   // when true, chat/API endpoints require authentication
 }
 
 // Load loads configuration from .env file, environment variables, and providers.json.
