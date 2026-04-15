@@ -44,6 +44,6 @@ func (s *Server) setupConsoleRoutes() {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write(index)
+		_, _ = w.Write(index)
 	})
 }

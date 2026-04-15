@@ -28,7 +28,7 @@ func (s *Server) handleListApiKeys(w http.ResponseWriter, r *http.Request) {
 	keys := s.collectApiKeys()
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(keys)
+	_ = json.NewEncoder(w).Encode(keys)
 }
 
 // setApiKeyRequest is the body for PUT /admin/api-keys/{envVarName}.
@@ -63,13 +63,13 @@ func (s *Server) handleSetApiKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update environment and re-resolve provider keys
-	os.Setenv(envVarName, req.Value)
+	_ = os.Setenv(envVarName, req.Value)
 	s.resolveAllProviderKeys()
 
 	// Return the updated key
 	key := s.buildApiKeyResponse(envVarName)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(key)
+	_ = json.NewEncoder(w).Encode(key)
 }
 
 // handleDeleteApiKey removes an API key from .env.
@@ -89,7 +89,7 @@ func (s *Server) handleDeleteApiKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Unset environment and re-resolve
-	os.Unsetenv(envVarName)
+	_ = os.Unsetenv(envVarName)
 	s.resolveAllProviderKeys()
 
 	w.WriteHeader(http.StatusNoContent)

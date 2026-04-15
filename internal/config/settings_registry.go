@@ -384,7 +384,7 @@ func SetSettingValue(cfg *Config, key string, value interface{}) error {
 		return fmt.Errorf("unknown setting key: %s", key)
 	}
 
-	os.Setenv(key, strVal)
+	_ = os.Setenv(key, strVal)
 	return nil
 }
 

@@ -45,7 +45,7 @@ func (s *Server) handleGetAuthProviders(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(providers)
+	_ = json.NewEncoder(w).Encode(providers)
 }
 
 // handleSaveAuthProvider saves or updates an auth provider configuration.

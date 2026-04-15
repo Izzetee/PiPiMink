@@ -1072,7 +1072,7 @@ func (db *DB) GetLatencyTimeSeries(start, end time.Time) ([]LatencyTimeSeriesRow
 	// Choose bucket size based on time range duration.
 	// date_trunc() accepts unit names like 'hour', 'minute', 'day' — not intervals.
 	duration := end.Sub(start)
-	bucket := "hour"
+	var bucket string
 	if duration <= 2*time.Hour {
 		bucket = "minute"
 	} else if duration <= 48*time.Hour {
