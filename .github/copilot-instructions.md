@@ -48,8 +48,8 @@ Routing decisions are cached in memory (LRU + TTL) to avoid redundant meta-model
 | `cmd/server/models.go` | `fetchAndTagModels` — orchestrates model refresh |
 | `cmd/server/status_handler.go` | `GET /admin/status` — unauthenticated instance state for setup wizard |
 | `cmd/server/console.go` | React SPA serving (embedded via `web/embed.go`) |
-| `cmd/server/oauth_handlers.go` | OAuth2/OIDC login, callback, session management |
-| `cmd/server/auth_middleware.go` | Centralized auth middleware (API key, session, passthrough) |
+| `cmd/server/oauth_handlers.go` | OAuth2/OIDC login, callback, session management, OIDC discovery with retry |
+| `cmd/server/auth_middleware.go` | Centralized auth middleware — 3-tier auth (Public/User/Admin), Bearer token validation |
 | `cmd/server/auth_admin_handlers.go` | User/group/audit admin API handlers |
 | `cmd/server/token_handlers.go` | Per-user Bearer token CRUD (`POST/GET/DELETE /auth/tokens`) |
 | `cmd/server/analytics_handlers.go` | Analytics summary and routing decision log |
@@ -225,7 +225,7 @@ Cache key = SHA hash of (normalized prompt + enabled model capability snapshot).
 - `scripts/update_models.sh` contains a hardcoded `X-API-Key` value — it must match `ADMIN_API_KEY` in your `.env` when testing locally.
 - Provider base URLs and timeouts come from `providers.json`, not env vars — check that file first when debugging connectivity.
 - Ollama-compatible endpoints intentionally advertise a single model named `PiPiMink v1` to clients, regardless of what models are loaded.
-- OAuth login requires Authentik to be running and configured before the first login works. Use `--with-authentik` flag for `start-stack.sh`.
+- OAuth login requires Authentik to be running and configured. OIDC discovery retries up to 6 times (30s total) in the background at startup, so Authentik can take up to 30 seconds to become ready after PiPiMink starts. Use `--with-authentik` flag for `start-stack.sh`.
 
 ## Authentication model
 
@@ -233,8 +233,8 @@ PiPiMink enforces a 3-tier auth model via centralized middleware (`cmd/server/au
 
 | Tier | Credentials accepted | Typical routes |
 | --- | --- | --- |
-| **Public** | None required | `/admin/status`, `/auth/login`, `/auth/callback`, `/console/*` |
-| **User** | OAuth session cookie or `Authorization: Bearer <token>` | `/chat`, `/v1/chat/completions`, `/auth/me`, `/auth/tokens` |
+| **Public** | None required | `/admin/status`, `/auth/login`, `/auth/callback`, `/auth/logout`, `/swagger/*`, `/metrics` |
+| **User** | OAuth session cookie or `Authorization: Bearer <token>` | `/chat`, `/v1/chat/completions`, `/console/*` (when OAuth enabled), `/auth/me`, `/auth/tokens` |
 | **Admin** | `X-API-Key` header or admin-role session | All `/admin/*` management endpoints |
 
 Bearer tokens are per-user API tokens stored in the database. They are created, listed, and revoked via `POST/GET/DELETE /auth/tokens` (implemented in `cmd/server/token_handlers.go`).

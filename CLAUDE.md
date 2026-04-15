@@ -61,7 +61,7 @@ Routing decisions are cached in memory (LRU + TTL) to avoid redundant meta-model
 | `providers.example.json` | Template for provider configuration |
 | `cmd/server/status_handler.go` | `GET /admin/status` — unauthenticated instance state for setup wizard |
 | `cmd/server/console.go` | React SPA serving (embedded via `web/embed.go`) |
-| `cmd/server/oauth_handlers.go` | OAuth2/OIDC login, callback, session management |
+| `cmd/server/oauth_handlers.go` | OAuth2/OIDC login, callback, session management, OIDC discovery with retry |
 | `cmd/server/auth_middleware.go` | Centralized auth middleware — 3-tier auth (Public/User/Admin), Bearer token validation |
 | `cmd/server/token_handlers.go` | Bearer token CRUD handlers (create, list, revoke) |
 | `cmd/server/auth_admin_handlers.go` | User/group/audit admin API handlers |
@@ -152,8 +152,8 @@ PiPiMink uses a three-tier auth model enforced by `auth_middleware.go`:
 
 | Tier | Middleware | Grants access to |
 | --- | --- | --- |
-| `AuthPublic` | None required | Unauthenticated endpoints (e.g. `/admin/status`, `/console/*`) |
-| `AuthUser` | Bearer token or session cookie | User-facing endpoints (chat, token management, analytics — own data only) |
+| `AuthPublic` | None required | Unauthenticated endpoints (e.g. `/admin/status`, `/auth/login`, `/swagger/*`, `/metrics`) |
+| `AuthUser` | Bearer token or session cookie | User-facing endpoints (chat, `/console/*` when OAuth enabled, token management, analytics — own data only) |
 | `AuthAdmin` | `X-API-Key` header | Admin-only endpoints (model management, settings, API key vault, all analytics) |
 
 ### Auth methods
@@ -247,7 +247,7 @@ npm run test:watch    # vitest in watch mode
 - `scripts/update_models.sh` contains a hardcoded `X-API-Key` value — it must match `ADMIN_API_KEY` in your `.env` when testing locally.
 - Provider base URLs and timeouts come from `providers.json`, not env vars — check that file first when debugging connectivity.
 - Ollama-compatible endpoints intentionally advertise a single model named `PiPiMink v1` to clients, regardless of what models are loaded.
-- OAuth login requires Authentik to be running and configured before the first login works. Use `--with-authentik` flag for `start-stack.sh`.
+- OAuth login requires Authentik to be running and configured. OIDC discovery retries up to 6 times (30s total) in the background at startup, so Authentik can take up to 30 seconds to become ready after PiPiMink starts. Use `--with-authentik` flag for `start-stack.sh`.
 
 ## License
 

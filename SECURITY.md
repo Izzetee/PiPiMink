@@ -69,6 +69,7 @@ The default fallback in `scripts/update_models.sh` (`admin-key-12345`) is for **
 - Set `SESSION_SECRET` to a 64-byte hex string in production. If unset, a random key is generated at startup and sessions will not survive a restart.
 - Session cookies are `HttpOnly` and `SameSite=Lax`.
 - In production, place PiPiMink behind a TLS-terminating reverse proxy so that session cookies are transmitted securely.
+- OIDC discovery retries up to 6 times at startup (5-second intervals), so PiPiMink tolerates slow-starting identity providers. Non-OAuth routes remain fully functional during the retry window.
 
 ### Docker / Database Credentials
 

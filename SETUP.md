@@ -331,7 +331,7 @@ PiPiMink supports two authentication modes:
 
 ### Setting up Authentik
 
-1. Start the stack with Authentik: `./scripts/start-stack.sh --with-authentik`
+1. Start the stack with Authentik: `./scripts/start-stack.sh --with-authentik` (uses Authentik 2026.2)
 1. Open `http://localhost:9000/if/flow/initial-setup/` and create an Authentik admin account
 1. In the Authentik admin panel, create an **OAuth2/OpenID Provider** for PiPiMink:
    - **Redirect URI**: `http://localhost:8080/auth/callback`
@@ -345,10 +345,12 @@ OAUTH_CLIENT_ID=<your-client-id>
 OAUTH_CLIENT_SECRET=<your-client-secret>
 OAUTH_REDIRECT_URL=http://localhost:8080/auth/callback
 OAUTH_AUTO_PROVISION=true
-SESSION_SECRET=<64-byte-hex-string>
+SESSION_SECRET=<128-hex-char-string>   # generate with: openssl rand -hex 64
 ```
 
 1. Restart PiPiMink — visiting `/console/` will redirect to Authentik for login
+
+> **Note:** PiPiMink retries OIDC discovery up to 6 times (5-second intervals) in the background at startup. If Authentik takes longer than usual to start, OAuth will connect automatically as soon as it becomes available — no manual restart needed.
 
 ### OAuth environment variables
 

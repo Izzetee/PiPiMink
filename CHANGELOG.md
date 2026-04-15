@@ -59,11 +59,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Hooks: useSetupStatus, useAuth, useTheme
   - API client and App routing tests (22 tests across 5 files)
 - Frontend CI job: TypeScript type check + Vitest in GitHub Actions
+- OIDC discovery retry logic: `initOAuth()` retries up to 6 times with 5-second intervals in a background goroutine, so PiPiMink starts immediately and non-OAuth routes work while the identity provider is still booting
+- First OAuth user automatically gets the `admin` role; subsequent users get `user`
+- HTTPS cookie `Secure` flag auto-detection based on `X-Forwarded-Proto` header or `OAUTH_REDIRECT_URL` scheme
+- `/auth/login` returns 503 with a user-friendly message during OIDC discovery retry window instead of generic "OAuth not configured"
 
 ### Changed
 
 - `/admin` and `/admin/config` now redirect to `/console/models` and `/console/config`
 - All model management moved from inline HTML to React console at `/console/`
+- Authentik docker-compose upgraded from 2024.12 to 2026.2.2; Redis removed (dropped in Authentik 2025.10), PostgreSQL upgraded to 16-alpine
+- `/auth/me` response `oauthEnabled` field now uses config check (`OAuthEnabled()`) instead of runtime `oauthConfig != nil`, so the frontend shows the OAuth login button even during OIDC discovery retry
 
 ### Removed
 
