@@ -324,7 +324,7 @@ func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
 	user := getUserFromContext(r)
 	if user != nil {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"authenticated": true,
 			"oauthEnabled":  oauthEnabled,
 			"user":          user,
@@ -335,7 +335,7 @@ func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
 	// Check if this is an API-key authenticated request
 	if isAPIKeyAuth(r) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"authenticated": true,
 			"oauthEnabled":  oauthEnabled,
 			"user": map[string]interface{}{
@@ -349,7 +349,7 @@ func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"authenticated": false,
 		"oauthEnabled":  oauthEnabled,
 	})

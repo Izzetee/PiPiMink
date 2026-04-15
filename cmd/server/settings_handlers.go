@@ -56,7 +56,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 // patchSettingsRequest is the expected body for PATCH /admin/settings.
@@ -116,7 +116,7 @@ func (s *Server) handlePatchSettings(w http.ResponseWriter, r *http.Request) {
 		ProviderOptions: s.buildProviderOptions(),
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 // buildSettingsMap constructs the settings response from the registry and current config.

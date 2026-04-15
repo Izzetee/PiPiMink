@@ -67,7 +67,7 @@ func (s *Server) handleSaveAuthProvider(w http.ResponseWriter, r *http.Request) 
 		"Auth provider configuration updated", nil)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(p)
+	_ = json.NewEncoder(w).Encode(p)
 }
 
 // handleTestAuthProvider tests connectivity to an auth provider.
@@ -139,7 +139,7 @@ func (s *Server) handleTestAuthProvider(w http.ResponseWriter, r *http.Request) 
 		"Auth provider connection test: "+result["status"].(string), nil)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	_ = json.NewEncoder(w).Encode(result)
 }
 
 // handleGetUsers returns all users.
@@ -154,7 +154,7 @@ func (s *Server) handleGetUsers(w http.ResponseWriter, r *http.Request) {
 		users = []database.UserRow{}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(users)
+	_ = json.NewEncoder(w).Encode(users)
 }
 
 // handleAddLocalUser creates a local user.
@@ -199,7 +199,7 @@ func (s *Server) handleAddLocalUser(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(user)
+	_ = json.NewEncoder(w).Encode(user)
 }
 
 // handleChangeUserRole changes a user's role.
@@ -228,7 +228,7 @@ func (s *Server) handleChangeUserRole(w http.ResponseWriter, r *http.Request) {
 		"Role changed to "+req.Role, nil)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 // handleDeleteUser performs GDPR-compliant user deletion.
@@ -258,7 +258,7 @@ func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 		"User deleted with full data purge", &reason)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 // handleGetGroups returns all groups with their routing rules.
@@ -273,7 +273,7 @@ func (s *Server) handleGetGroups(w http.ResponseWriter, r *http.Request) {
 		groups = []database.GroupRow{}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(groups)
+	_ = json.NewEncoder(w).Encode(groups)
 }
 
 // handleChangeGroupRole changes a group's role.
@@ -302,7 +302,7 @@ func (s *Server) handleChangeGroupRole(w http.ResponseWriter, r *http.Request) {
 		"Group role changed to "+req.Role, nil)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 // handleAddRoutingRule adds a routing rule to a group.
@@ -327,7 +327,7 @@ func (s *Server) handleAddRoutingRule(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(rule)
+	_ = json.NewEncoder(w).Encode(rule)
 }
 
 // handleRemoveRoutingRule removes a routing rule from a group.
@@ -346,7 +346,7 @@ func (s *Server) handleRemoveRoutingRule(w http.ResponseWriter, r *http.Request)
 		"Removed routing rule: "+ruleID, nil)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 // handleGetAuditLog returns audit log entries.
@@ -361,5 +361,5 @@ func (s *Server) handleGetAuditLog(w http.ResponseWriter, r *http.Request) {
 		entries = []database.AuditEntryRow{}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(entries)
+	_ = json.NewEncoder(w).Encode(entries)
 }

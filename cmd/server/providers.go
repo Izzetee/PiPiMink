@@ -142,7 +142,7 @@ func (s *Server) handleListProviders(w http.ResponseWriter, r *http.Request) {
 	s.providerMutex.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"providers": providers,
 	})
 }
@@ -203,7 +203,7 @@ func (s *Server) handleAddProvider(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(s.toProviderResponse(p, 0))
+	_ = json.NewEncoder(w).Encode(s.toProviderResponse(p, 0))
 }
 
 // handleUpdateProvider updates an existing provider (name change not allowed).
@@ -262,7 +262,7 @@ func (s *Server) handleUpdateProvider(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(s.toProviderResponse(*p, s.countModelsForProvider(p.Name)))
+	_ = json.NewEncoder(w).Encode(s.toProviderResponse(*p, s.countModelsForProvider(p.Name)))
 }
 
 // handleDeleteProvider removes a provider.
@@ -293,7 +293,7 @@ func (s *Server) handleDeleteProvider(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
 }
 
 // handleToggleProvider enables or disables a provider.
@@ -330,7 +330,7 @@ func (s *Server) handleToggleProvider(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{"enabled": req.Enabled})
+	_ = json.NewEncoder(w).Encode(map[string]bool{"enabled": req.Enabled})
 }
 
 // handleTestProvider tests connectivity to a provider by listing its models.
@@ -387,7 +387,7 @@ func (s *Server) handleTestProvider(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 // handleUpdateModelConfigs bulk-replaces the model configs for a provider.
@@ -426,7 +426,7 @@ func (s *Server) handleUpdateModelConfigs(w http.ResponseWriter, r *http.Request
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
 }
 
 // decodeMuxVar extracts and URL-decodes a mux route variable.
