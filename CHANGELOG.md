@@ -79,6 +79,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Azure AI Foundry: provider and per-model config changes made in the Console UI now persist to `providers.json`. `SaveProviders` used an atomic temp-file + rename, which fails with `EBUSY` on single-file Docker bind mounts; it now falls back to an in-place write. `providers.json` and `.env` are bind-mounted read-write in the compose files so UI changes survive container rebuilds.
+- Provider config changes now propagate to the running LLM client immediately. The client held a provider snapshot from startup; a mutex-guarded `SetProviders()` is now invoked from every provider mutation handler, so chat, routing, and benchmark use the current config instead of a stale map (previously tagging worked but chat/benchmark hit the wrong endpoint).
+- Anthropic response parsing now scans all content blocks: extended-thinking models (e.g. Claude on Azure Foundry) emit a `thinking` block before the `text` block, which previously caused "missing/empty content" failures during tagging, chat, and benchmarking.
+- Anthropic policy refusals (`stop_reason=refusal`) are now surfaced as a distinct, clear error instead of a misleading "empty content" message.
+- `scripts/start-stack.sh` now rebuilds the app image (`up -d --build`) so code changes are actually deployed to the running container.
 - Analytics latency time series query using incorrect `date_trunc` unit strings (`"1 hour"` → `"hour"`)
 
 ---

@@ -10,7 +10,7 @@
     '''SECURITY\.md''',
     '''CONTRIBUTING\.md''',
     '''CHANGELOG\.md''',
-    '''CLAUDE\.md''',
+    '''AGENTS\.md''',
     '''\.github/copilot-instructions\.md''',
   ]
 
