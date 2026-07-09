@@ -103,6 +103,42 @@ func TestGetModelTags(t *testing.T) {
 	})
 }
 
+func TestExtractAnthropicContent(t *testing.T) {
+	t.Run("Text block only", func(t *testing.T) {
+		body := []byte(`{"content":[{"type":"text","text":"{\"strengths\":[\"a\"],\"weaknesses\":[\"b\"]}"}]}`)
+		content, err := extractAnthropicContent(body)
+		assert.NoError(t, err)
+		assert.Equal(t, `{"strengths":["a"],"weaknesses":["b"]}`, content)
+	})
+
+	t.Run("Thinking block before text block", func(t *testing.T) {
+		body := []byte(`{"content":[{"type":"thinking","thinking":"","signature":"abc"},{"type":"text","text":"{\"strengths\":[\"a\"],\"weaknesses\":[\"b\"]}"}]}`)
+		content, err := extractAnthropicContent(body)
+		assert.NoError(t, err)
+		assert.Equal(t, `{"strengths":["a"],"weaknesses":["b"]}`, content)
+	})
+
+	t.Run("Empty content", func(t *testing.T) {
+		body := []byte(`{"content":[]}`)
+		_, err := extractAnthropicContent(body)
+		assert.Error(t, err)
+	})
+
+	t.Run("No text block", func(t *testing.T) {
+		body := []byte(`{"content":[{"type":"thinking","thinking":"reasoning"}]}`)
+		_, err := extractAnthropicContent(body)
+		assert.Error(t, err)
+	})
+
+	t.Run("Refusal response", func(t *testing.T) {
+		body := []byte(`{"content":[],"stop_reason":"refusal","stop_details":{"type":"refusal","category":"cyber","explanation":"This request triggered restrictions on violative cyber content."}}`)
+		_, err := extractAnthropicContent(body)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "model refused the request")
+		assert.Contains(t, err.Error(), "cyber content")
+	})
+}
+
 func TestDisableModelsWithEmptyTags(t *testing.T) {
 	mockDB := new(MockDatabase)
 

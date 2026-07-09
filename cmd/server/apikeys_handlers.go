@@ -194,6 +194,7 @@ func (s *Server) resolveAllProviderKeys() {
 	for i := range s.config.Providers {
 		config.ResolveProviderKeys(&s.config.Providers[i])
 	}
+	s.llmClient.SetProviders(s.config.Providers)
 }
 
 // envFileMtime returns the .env file modification time as an ISO string, or empty.

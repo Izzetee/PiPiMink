@@ -342,7 +342,11 @@ func ResolveProviderKeys(p *ProviderConfig) {
 }
 
 // SaveProviders writes the provider list to providers.json in the given directory.
-// The write is atomic: data is written to a temp file then renamed.
+// It first attempts an atomic write (temp file + rename). If the rename fails —
+// which happens when providers.json is a single-file bind mount in Docker, where
+// renaming over the mounted inode returns EBUSY — it falls back to writing the
+// file in place. In-place writes update the mounted inode directly and therefore
+// persist to the host file.
 func SaveProviders(dir string, providers []ProviderConfig) error {
 	data, err := json.MarshalIndent(providers, "", "  ")
 	if err != nil {
@@ -356,8 +360,12 @@ func SaveProviders(dir string, providers []ProviderConfig) error {
 		return fmt.Errorf("write temp file: %w", err)
 	}
 	if err := os.Rename(tmp, path); err != nil {
+		// Atomic rename is not possible (e.g. single-file bind mount). Remove the
+		// temp file and write the target in place instead.
 		_ = os.Remove(tmp)
-		return fmt.Errorf("rename temp file: %w", err)
+		if werr := os.WriteFile(path, data, 0644); werr != nil {
+			return fmt.Errorf("write providers file in place (after rename failed: %v): %w", err, werr)
+		}
 	}
 	return nil
 }

@@ -91,4 +91,5 @@ type LLMInterface interface {
 	GetModelsByProvider(p config.ProviderConfig) ([]string, error)
 	IsLocalServerUsingMLX() bool
 	UpdateTaggingPrompts(systemPrompt, userPrompt, userNoSysPrompt string)
+	SetProviders(providers []config.ProviderConfig)
 }

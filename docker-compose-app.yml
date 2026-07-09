@@ -6,6 +6,14 @@ services:
       - .env
     ports:
       - "8080:8080"
+    volumes:
+      # Bind-mount config files read-write so changes made in the Console UI
+      # (providers, model configs, API keys, settings) persist to the host
+      # files and survive container rebuilds.
+      - ./providers.json:/app/providers.json
+      - ./.env:/app/.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - pipimink-network
     command: ["./pipimink"]

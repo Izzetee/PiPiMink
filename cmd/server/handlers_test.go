@@ -343,6 +343,10 @@ func (m *MockLLMClient) GetModelsByProvider(p config.ProviderConfig) ([]string, 
 	return args.Get(0).([]string), args.Error(1)
 }
 
+func (m *MockLLMClient) SetProviders(providers []config.ProviderConfig) {
+	m.Called(providers)
+}
+
 // Implement IsLocalServerUsingMLX to satisfy the LLMInterface
 func (m *MockLLMClient) IsLocalServerUsingMLX() bool {
 	args := m.Called()

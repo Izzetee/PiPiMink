@@ -43,7 +43,9 @@ fi
 
 # Start the PiPiMink service
 echo "Starting PiPiMink service..."
-$COMPOSE_CMD -f docker-compose-app.yml up -d
+# --build ensures the image is rebuilt from the current source so code changes
+# (e.g. provider handling) are always deployed, not served from a stale image.
+$COMPOSE_CMD -f docker-compose-app.yml up -d --build
 
 # Give PiPiMink time to start up
 echo "Waiting for PiPiMink service to start (5 seconds)..."
