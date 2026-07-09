@@ -33,7 +33,7 @@ This project was built with the help of AI coding tools (Claude Code, GitHub Cop
 
 - **Understand what you submit.** Review every line of AI-generated code before committing. You are responsible for the correctness, security, and maintainability of your contribution — not the AI.
 - **Test thoroughly.** AI-generated code can look plausible while being subtly wrong. Run the full test suite (`go test ./...`) and verify edge cases manually.
-- **Respect the architecture.** AI tools sometimes ignore existing patterns or invent unnecessary abstractions. Follow the conventions described in this guide and in `CLAUDE.md`.
+- **Respect the architecture.** AI tools sometimes ignore existing patterns or invent unnecessary abstractions. Follow the conventions described in this guide and in `AGENTS.md`.
 - **Do not blindly paste.** If you do not understand why a piece of generated code works, do not include it. Ask questions in the PR instead.
 - **Disclose when helpful.** You are not required to label every AI-assisted line, but if a PR contains substantial AI-generated logic, a brief note in the PR description helps reviewers calibrate their review.
 

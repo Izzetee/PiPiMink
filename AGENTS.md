@@ -1,4 +1,4 @@
-# PiPiMink — Project Context for Claude
+# PiPiMink — Project Context for AI Coding Agents
 
 ## What this project is
 
