@@ -58,7 +58,10 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./providers.json:/app/providers.json:ro
+      # Read-write so provider/model changes made in the Console UI persist
+      # to the host providers.json and survive container rebuilds.
+      - ./providers.json:/app/providers.json
+      - ./.env:/app/.env
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

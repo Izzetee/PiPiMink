@@ -479,19 +479,43 @@ func extractAnthropicContent(body []byte) (string, error) {
 		return "", fmt.Errorf("error decoding Anthropic response: %w", err)
 	}
 
+	// A refusal is a valid 200 response with empty content and stop_reason=refusal.
+	// Surface it as a distinct error so it isn't mistaken for a parsing failure.
+	if stop, _ := result["stop_reason"].(string); stop == "refusal" {
+		return "", fmt.Errorf("model refused the request: %s", anthropicRefusalReason(result))
+	}
+
 	contentArr, ok := result["content"].([]interface{})
 	if !ok || len(contentArr) == 0 {
 		return "", fmt.Errorf("missing or empty content in Anthropic response")
 	}
-	block, ok := contentArr[0].(map[string]interface{})
-	if !ok {
-		return "", fmt.Errorf("invalid content block format")
+	// Extended-thinking models emit one or more "thinking" blocks before the
+	// "text" block, so scan for the first block that carries text rather than
+	// assuming it is at index 0.
+	for _, raw := range contentArr {
+		block, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if text, ok := block["text"].(string); ok && text != "" {
+			return text, nil
+		}
 	}
-	text, ok := block["text"].(string)
-	if !ok {
-		return "", fmt.Errorf("missing text in Anthropic content block")
+	return "", fmt.Errorf("missing text in Anthropic content block")
+}
+
+// anthropicRefusalReason extracts a human-readable explanation from a refusal
+// response's stop_details, falling back to a generic message.
+func anthropicRefusalReason(result map[string]interface{}) string {
+	if sd, ok := result["stop_details"].(map[string]interface{}); ok {
+		if e, ok := sd["explanation"].(string); ok && e != "" {
+			return e
+		}
+		if cat, ok := sd["category"].(string); ok && cat != "" {
+			return "blocked by provider usage policy (category: " + cat + ")"
+		}
 	}
-	return text, nil
+	return "blocked by provider usage policy"
 }
 
 // isReasoningModelNoSysMsg returns true for o-series models that do not support

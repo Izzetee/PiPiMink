@@ -250,6 +250,11 @@ func extractOpenAIContent(body []byte) (string, error) {
 // extractAnthropicContent extracts text from an Anthropic Messages API response.
 func extractAnthropicContent(body []byte) (string, error) {
 	var result struct {
+		StopReason  string `json:"stop_reason"`
+		StopDetails struct {
+			Category    string `json:"category"`
+			Explanation string `json:"explanation"`
+		} `json:"stop_details"`
 		Content []struct {
 			Text string `json:"text"`
 		} `json:"content"`
@@ -257,10 +262,30 @@ func extractAnthropicContent(body []byte) (string, error) {
 	if err := json.Unmarshal(body, &result); err != nil {
 		return "", fmt.Errorf("error decoding Anthropic response: %w", err)
 	}
+	// A refusal is a valid 200 response with empty content and stop_reason=refusal.
+	// Surface it as a distinct error so it isn't mistaken for a parsing failure.
+	if result.StopReason == "refusal" {
+		reason := result.StopDetails.Explanation
+		if reason == "" {
+			if result.StopDetails.Category != "" {
+				reason = "blocked by provider usage policy (category: " + result.StopDetails.Category + ")"
+			} else {
+				reason = "blocked by provider usage policy"
+			}
+		}
+		return "", fmt.Errorf("model refused the request: %s", reason)
+	}
 	if len(result.Content) == 0 {
 		return "", fmt.Errorf("missing or empty content in Anthropic response")
 	}
-	return result.Content[0].Text, nil
+	// Extended-thinking models emit one or more "thinking" blocks (which have no
+	// text) before the "text" block, so return the first block that carries text.
+	for _, block := range result.Content {
+		if block.Text != "" {
+			return block.Text, nil
+		}
+	}
+	return "", fmt.Errorf("missing text in Anthropic content block")
 }
 
 func min(a, b float64) float64 {

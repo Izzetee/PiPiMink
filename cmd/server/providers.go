@@ -200,6 +200,7 @@ func (s *Server) handleAddProvider(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"failed to save providers"}`, http.StatusInternalServerError)
 		return
 	}
+	s.llmClient.SetProviders(s.config.Providers)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -260,6 +261,7 @@ func (s *Server) handleUpdateProvider(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"failed to save providers"}`, http.StatusInternalServerError)
 		return
 	}
+	s.llmClient.SetProviders(s.config.Providers)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(s.toProviderResponse(*p, s.countModelsForProvider(p.Name)))
@@ -291,6 +293,7 @@ func (s *Server) handleDeleteProvider(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"failed to save providers"}`, http.StatusInternalServerError)
 		return
 	}
+	s.llmClient.SetProviders(s.config.Providers)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
@@ -328,6 +331,7 @@ func (s *Server) handleToggleProvider(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"failed to save providers"}`, http.StatusInternalServerError)
 		return
 	}
+	s.llmClient.SetProviders(s.config.Providers)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]bool{"enabled": req.Enabled})
@@ -424,6 +428,7 @@ func (s *Server) handleUpdateModelConfigs(w http.ResponseWriter, r *http.Request
 		http.Error(w, `{"error":"failed to save providers"}`, http.StatusInternalServerError)
 		return
 	}
+	s.llmClient.SetProviders(s.config.Providers)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "updated"})

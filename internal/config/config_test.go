@@ -77,3 +77,37 @@ func TestLoadReadsConfiguredValues(t *testing.T) {
 	// Providers are loaded from providers.json; without the file only the default OpenAI entry is present
 	assert.NotEmpty(t, cfg.Providers)
 }
+
+func TestSaveProvidersRoundTripAndOverwrite(t *testing.T) {
+	dir := t.TempDir()
+
+	first := []ProviderConfig{
+		{Name: "openai", Type: ProviderTypeOpenAICompatible, BaseURL: "https://api.openai.com"},
+	}
+	assert.NoError(t, SaveProviders(dir, first))
+
+	got := loadProviders(dir)
+	assert.Len(t, got, 1)
+	assert.Equal(t, "openai", got[0].Name)
+
+	// Overwriting an existing providers.json must succeed and replace the content.
+	second := []ProviderConfig{
+		{Name: "openai", Type: ProviderTypeOpenAICompatible, BaseURL: "https://api.openai.com"},
+		{
+			Name:    "az-foundry",
+			Type:    ProviderTypeOpenAICompatible,
+			BaseURL: "https://example.cognitiveservices.azure.com",
+			ModelConfigs: []ModelConfig{
+				{Name: "claude-haiku-4-5", Type: ProviderTypeAnthropic, BaseURL: "https://example.services.ai.azure.com/anthropic"},
+			},
+		},
+	}
+	assert.NoError(t, SaveProviders(dir, second))
+
+	got = loadProviders(dir)
+	assert.Len(t, got, 2)
+	assert.Equal(t, "az-foundry", got[1].Name)
+	assert.Len(t, got[1].ModelConfigs, 1)
+	assert.Equal(t, "claude-haiku-4-5", got[1].ModelConfigs[0].Name)
+	assert.Equal(t, ProviderTypeAnthropic, got[1].ModelConfigs[0].Type)
+}
