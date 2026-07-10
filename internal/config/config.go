@@ -90,10 +90,11 @@ func (p ProviderConfig) ForModel(name string) ProviderConfig {
 // ChatCompletionsURL returns the full URL for the chat completions endpoint.
 // If ChatPath is set it overrides the default /v1/chat/completions path.
 func (p ProviderConfig) ChatCompletionsURL() string {
+	base := strings.TrimRight(p.BaseURL, "/")
 	if p.ChatPath != "" {
-		return p.BaseURL + p.ChatPath
+		return base + p.ChatPath
 	}
-	return p.BaseURL + "/v1/chat/completions"
+	return base + "/v1/chat/completions"
 }
 
 // UsesResponsesAPI reports whether requests to this provider/model must use the
@@ -112,12 +113,19 @@ func (p ProviderConfig) UsesResponsesAPI() bool {
 }
 
 // ResponsesURL returns the full URL for the OpenAI Responses API endpoint.
-// If ChatPath is set it overrides the default /v1/responses path.
+// If ChatPath is set it overrides the default path. Otherwise the default is
+// chosen by host: Azure AI Foundry serves the Responses API under
+// /openai/v1/responses, whereas OpenAI itself uses /v1/responses. This lets the
+// openai-responses type work out of the box without an explicit chat_path.
 func (p ProviderConfig) ResponsesURL() string {
+	base := strings.TrimRight(p.BaseURL, "/")
 	if p.ChatPath != "" {
-		return p.BaseURL + p.ChatPath
+		return base + p.ChatPath
 	}
-	return p.BaseURL + "/v1/responses"
+	if strings.Contains(strings.ToLower(base), "azure.com") {
+		return base + "/openai/v1/responses"
+	}
+	return base + "/v1/responses"
 }
 
 // OAuthEnabled returns true when all required OAuth fields are configured.

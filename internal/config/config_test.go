@@ -130,11 +130,19 @@ func TestUsesResponsesAPI(t *testing.T) {
 }
 
 func TestResponsesURL(t *testing.T) {
-	// Default path.
+	// Default path for OpenAI.
 	p := ProviderConfig{Type: ProviderTypeOpenAIResponses, BaseURL: "https://api.openai.com"}
 	assert.Equal(t, "https://api.openai.com/v1/responses", p.ResponsesURL())
 
-	// Explicit chat path override (Azure AI Foundry).
+	// Azure AI Foundry host defaults to /openai/v1/responses without an explicit chat_path.
+	p = ProviderConfig{Type: ProviderTypeOpenAIResponses, BaseURL: "https://x.services.ai.azure.com"}
+	assert.Equal(t, "https://x.services.ai.azure.com/openai/v1/responses", p.ResponsesURL())
+
+	// Trailing slash on the base URL must not produce a double slash.
+	p = ProviderConfig{Type: ProviderTypeOpenAIResponses, BaseURL: "https://x.services.ai.azure.com/"}
+	assert.Equal(t, "https://x.services.ai.azure.com/openai/v1/responses", p.ResponsesURL())
+
+	// Explicit chat path override wins.
 	p = ProviderConfig{
 		Type:     ProviderTypeOpenAIResponses,
 		BaseURL:  "https://x.services.ai.azure.com",
