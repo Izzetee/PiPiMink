@@ -163,9 +163,9 @@ func (c *Client) chatWithOpenAIResponsesModel(p config.ProviderConfig, model str
 
 	if status >= 400 {
 		if msg := extractAPIErrorMessage(body); msg != "" {
-			return "", fmt.Errorf("Responses API error (HTTP %d): %s", status, msg)
+			return "", fmt.Errorf("responses API error (HTTP %d): %s", status, msg)
 		}
-		return "", fmt.Errorf("Responses API returned HTTP %d", status)
+		return "", fmt.Errorf("responses API returned HTTP %d", status)
 	}
 
 	content, err := extractResponsesContent(body)

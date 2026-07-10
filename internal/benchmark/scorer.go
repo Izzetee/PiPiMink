@@ -296,7 +296,7 @@ func extractResponsesContent(body []byte) (string, error) {
 		return "", fmt.Errorf("error decoding Responses API response: %w", err)
 	}
 	if apiResp.Error != nil && apiResp.Error.Message != "" {
-		return "", fmt.Errorf("Responses API error: %s", apiResp.Error.Message)
+		return "", fmt.Errorf("responses API error: %s", apiResp.Error.Message)
 	}
 	var sb strings.Builder
 	for _, item := range apiResp.Output {
