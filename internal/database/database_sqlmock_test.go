@@ -212,6 +212,8 @@ func TestInitSchema_ColumnsAlreadyExist(t *testing.T) {
 		is_builtin     BOOLEAN NOT NULL DEFAULT TRUE,
 		updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 	);
+	ALTER TABLE benchmark_task_configs
+		ADD COLUMN IF NOT EXISTS judge_strictness INT NOT NULL DEFAULT 3;
 	CREATE TABLE IF NOT EXISTS system_prompts (
 		key        TEXT PRIMARY KEY,
 		value      TEXT NOT NULL,

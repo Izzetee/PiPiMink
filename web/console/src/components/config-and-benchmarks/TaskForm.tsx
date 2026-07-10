@@ -28,7 +28,7 @@ export function TaskForm({ task, existingCategories, onSave, onCancel }: TaskFor
     task?.judgeCriteria ?? [{ name: '', description: '' }]
   )
   const [expectedAnswer, setExpectedAnswer] = useState(task?.expectedAnswer ?? '')
-  const [difficulty, setDifficulty] = useState(task?.difficulty ?? 3)
+  const [judgeStrictness, setJudgeStrictness] = useState(task?.judgeStrictness ?? 3)
   const [enabled, setEnabled] = useState(task?.enabled ?? true)
 
   const isEditing = !!task
@@ -59,7 +59,7 @@ export function TaskForm({ task, existingCategories, onSave, onCancel }: TaskFor
           ? judgeCriteria.filter((c) => c.name.trim() || c.description.trim())
           : null,
       expectedAnswer: scoringMethod === 'deterministic' ? expectedAnswer || null : null,
-      difficulty,
+      judgeStrictness,
       enabled,
       builtin: task?.builtin ?? false,
     })
@@ -136,7 +136,7 @@ export function TaskForm({ task, existingCategories, onSave, onCancel }: TaskFor
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {/* Scoring Method */}
         <div>
           <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
@@ -156,26 +156,6 @@ export function TaskForm({ task, existingCategories, onSave, onCancel }: TaskFor
           <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">
             {scoringMethods.find((m) => m.value === scoringMethod)?.description}
           </p>
-        </div>
-
-        {/* Difficulty */}
-        <div>
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-            Difficulty (1–5)
-          </label>
-          <div className="flex items-center gap-2">
-            <input
-              type="range"
-              min={1}
-              max={5}
-              value={difficulty}
-              onChange={(e) => setDifficulty(Number(e.target.value))}
-              className="flex-1 accent-indigo-500"
-            />
-            <span className="w-6 text-center text-sm font-mono font-medium text-slate-700 dark:text-slate-300">
-              {difficulty}
-            </span>
-          </div>
         </div>
 
         {/* Enabled */}
@@ -201,6 +181,37 @@ export function TaskForm({ task, existingCategories, onSave, onCancel }: TaskFor
           </button>
         </div>
       </div>
+
+      {/* Judge Strictness — only meaningful for LLM Judge scoring */}
+      {scoringMethod === 'llm-judge' && (
+        <div>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+            Judge Strictness (1–5)
+          </label>
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 shrink-0">
+              Lenient
+            </span>
+            <input
+              type="range"
+              min={1}
+              max={5}
+              value={judgeStrictness}
+              onChange={(e) => setJudgeStrictness(Number(e.target.value))}
+              className="flex-1 accent-indigo-500"
+            />
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 shrink-0">
+              Strict
+            </span>
+            <span className="w-6 text-center text-sm font-mono font-medium text-slate-700 dark:text-slate-300">
+              {judgeStrictness}
+            </span>
+          </div>
+          <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">
+            How harshly the LLM judge grades: 1 rewards partial correctness, 5 demands a near-perfect match to the criteria.
+          </p>
+        </div>
+      )}
 
       {/* LLM Judge: structured criteria rows */}
       {scoringMethod === 'llm-judge' && (

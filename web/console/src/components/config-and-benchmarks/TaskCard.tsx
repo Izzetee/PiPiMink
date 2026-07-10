@@ -166,9 +166,11 @@ export function TaskCard({
               <ScoringIcon className="w-3 h-3" strokeWidth={2} />
               {task.scoringMethod}
             </span>
-            <span className="text-[10px] text-slate-400 dark:text-slate-500">
-              Diff {task.difficulty}/5
-            </span>
+            {task.scoringMethod === 'llm-judge' && (
+              <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                Strictness {task.judgeStrictness}/5
+              </span>
+            )}
             <span className="text-[10px] text-slate-400 dark:text-slate-500">
               {task.resultCount} result{task.resultCount !== 1 ? 's' : ''}
             </span>

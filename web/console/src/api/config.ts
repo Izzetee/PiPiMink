@@ -22,6 +22,7 @@ interface BackendBenchmarkTask {
   scoring_method: string
   expected_answer: string
   judge_criteria: BackendJudgeCriterion[] | null
+  judge_strictness: number
   enabled: boolean
   is_builtin: boolean
   updated_at: string
@@ -76,7 +77,7 @@ function transformTask(t: BackendBenchmarkTask): BenchmarkTask {
       ? t.judge_criteria.map((c) => ({ name: c.Name, description: c.Description }))
       : null,
     expectedAnswer: t.expected_answer || null,
-    difficulty: 3,
+    judgeStrictness: t.judge_strictness || 3,
     enabled: t.enabled,
     builtin: t.is_builtin,
     resultCount: 0,
@@ -100,6 +101,7 @@ function toBackendTask(
     scoring_method: task.scoringMethod,
     expected_answer: task.expectedAnswer ?? '',
     judge_criteria: criteria,
+    judge_strictness: task.judgeStrictness ?? 3,
     enabled: task.enabled,
     is_builtin: task.builtin,
     updated_at: '',

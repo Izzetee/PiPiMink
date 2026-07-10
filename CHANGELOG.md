@@ -8,8 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.0] — Authentication, Console & Judge Strictness
+
 ### Added
 
+- **Benchmark judge strictness** (replaces the previously cosmetic "Difficulty" slider): each `llm-judge` task now carries a `judge_strictness` level (1 = lenient … 5 = strict, default 3). The level is persisted and injected into the judge system prompt, so the evaluator grades anywhere from "reward partial correctness" up to "demand a near-perfect match to the criteria". Adds a `judge_strictness` column to `benchmark_task_configs` (additive migration, defaults to 3); the console TaskForm/TaskCard now show a "Judge Strictness" control only for LLM-judge tasks. Fixes #50.
 - Azure AI Foundry OpenAI models via the **Responses API** (`/openai/v1/responses`): new provider type `openai-responses` (plus auto-detection when a `chat_path` targets `/responses`). Requests use the `input` field and responses are parsed from the `output` array, so Foundry OpenAI deployments (e.g. `gpt-5.x`) can be tagged, routed, chatted, and benchmarked. `temperature` and `max_output_tokens` are omitted by default so reasoning models are not rejected. The console UI exposes the new type in the provider and per-model selectors. Fixes #47.
 - 3-tier authentication model: Public (unauthenticated), User (session or Bearer token), Admin (X-API-Key or admin session)
   - Centralized auth middleware enforces tiers on all routes — new handlers must not perform inline auth checks
