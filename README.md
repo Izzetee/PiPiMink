@@ -194,6 +194,14 @@ Open `http://localhost:8080` — the setup wizard will guide you through configu
 
 For file-based configuration or advanced setups (Azure AI Foundry, Authentik OAuth, local development), see **[SETUP.md](SETUP.md)**.
 
+### Container image
+
+Prebuilt multi-arch images (`linux/amd64`, `linux/arm64`) are published to the GitHub Container Registry on every release:
+
+```bash
+docker pull ghcr.io/izzetee/pipimink:latest   # or a specific version, e.g. :v0.6.0
+```
+
 ## AI-Assisted Development
 
 This project was developed with the assistance of AI coding tools. Contributions that use AI are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md#ai-assisted-development) for guidelines.
