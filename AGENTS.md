@@ -121,12 +121,14 @@ Providers are configured in **`providers.json`** (copy from `providers.example.j
 | Field | Meaning |
 | --- | --- |
 | `name` | Unique identifier; stored as `source` in the model registry |
-| `type` | `openai-compatible` or `anthropic` |
+| `type` | `openai-compatible`, `openai-responses`, or `anthropic` |
 | `api_key_env` | Env var name holding the API key |
 | `models` | Empty = auto-discover via `/v1/models`; non-empty = static list (Anthropic, Azure) |
 | `rate_limit_seconds` | Min seconds between requests (0 = unlimited) |
 
 Azure AI Foundry: one `ProviderConfig` entry per deployment, with `"models": ["model-name"]`.
+
+Azure AI Foundry OpenAI models on the Responses API (`/openai/v1/responses`) use `type: openai-responses` (requests send `input`, responses parse `output`). PiPiMink also auto-detects the Responses API when a `chat_path` contains `/responses`. Request building/parsing lives in `internal/llm/responses.go`; `ProviderConfig.UsesResponsesAPI()` and `ResponsesURL()` in `internal/config/config.go` drive the dispatch.
 
 ## Important configuration defaults
 

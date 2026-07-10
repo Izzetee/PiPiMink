@@ -1,5 +1,5 @@
 /** Provider type identifier */
-export type ProviderType = 'openai-compatible' | 'anthropic'
+export type ProviderType = 'openai-compatible' | 'openai-responses' | 'anthropic'
 
 /** Result of a connectivity test */
 export type TestResult = 'success' | 'error'

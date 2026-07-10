@@ -74,9 +74,11 @@ func (c *Client) GetModelTags(model string, p config.ProviderConfig) (string, bo
 	var shouldDisable, shouldDelete bool
 	var err error
 
-	switch p.Type {
-	case config.ProviderTypeAnthropic:
+	switch {
+	case p.Type == config.ProviderTypeAnthropic:
 		tags, shouldDisable, shouldDelete, err = c.getTagsAnthropic(model, p)
+	case p.UsesResponsesAPI():
+		tags, shouldDisable, shouldDelete, err = c.getTagsOpenAIResponses(model, p)
 	default:
 		tags, shouldDisable, shouldDelete, err = c.getTagsOpenAICompatible(model, p)
 	}
@@ -390,6 +392,65 @@ func (c *Client) getTagsOpenAICompatibleUserRoleOnly(model string, p config.Prov
 	}
 
 	return c.extractTagsFromOpenAIResponse(responseBody.Bytes(), model)
+}
+
+// getTagsOpenAIResponses fetches capability tags via the OpenAI Responses API.
+// It mirrors getTagsOpenAICompatible but sends the prompt in "input" and reads the
+// answer from "output". temperature and max_output_tokens are omitted so reasoning
+// models are not rejected and are free to allocate their own output budget.
+func (c *Client) getTagsOpenAIResponses(model string, p config.ProviderConfig) (string, bool, bool, error) {
+	if isKnownNonChatModel(model) {
+		log.Printf("Model %s identified as non-chat model by name — deleting", model)
+		return "", false, true, nil
+	}
+
+	url := p.ResponsesURL()
+
+	var messages []map[string]interface{}
+	if isReasoningModelNoSysMsg(model) {
+		messages = []map[string]interface{}{
+			{"role": "user", "content": c.activeTaggingUserNoSysPrompt()},
+		}
+	} else {
+		messages = []map[string]interface{}{
+			{"role": "system", "content": c.activeTaggingSystemPrompt()},
+			{"role": "user", "content": c.activeTaggingUserPrompt()},
+		}
+	}
+
+	payload := buildResponsesPayload(model, messages, responsesRequestOptions{})
+
+	log.Printf("Sending tags request to %s for model %s", url, model)
+	body, status, err := sendResponsesRequest(url, p.APIKey, payload, p.Timeout)
+	if err != nil {
+		return "", false, false, err
+	}
+	log.Printf("Raw tags response for model %s: %s", model, string(body))
+
+	if status >= 400 {
+		msg := extractAPIErrorMessage(body)
+		if msg != "" {
+			log.Printf("API error for model %s (HTTP %d): %s", model, status, msg)
+			// Not a chat model at all (e.g. completion-only, image, embedding).
+			if strings.Contains(msg, "This is not a chat model") ||
+				strings.Contains(msg, "not supported in the v1/chat/completions endpoint") {
+				return "", false, true, nil
+			}
+			// Audio/vision/modality-only models.
+			if IsModelIncompatibleError(msg) {
+				return `{"strengths":["unavailable"],"weaknesses":["text-incompatible"]}`, true, false, nil
+			}
+		}
+		// Unknown 4xx — fall through; extraction will surface the error.
+	}
+
+	content, err := extractResponsesContent(body)
+	if err != nil {
+		return "", false, false, err
+	}
+	extracted := c.extractJSON(content)
+	log.Printf("Model %s (responses) extracted tags: %s", model, extracted)
+	return extracted, false, false, nil
 }
 
 // getTagsAnthropic fetches capability tags using the Anthropic Messages API.
