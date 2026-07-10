@@ -53,6 +53,25 @@ type JudgeCriterion struct {
 	Description string // what the judge should look for
 }
 
+// DefaultJudgeStrictness is the neutral judge-strictness level applied when a task
+// does not specify one. 1 = most lenient, 5 = most strict.
+const DefaultJudgeStrictness = 3
+
+// NormalizeStrictness clamps a judge-strictness level to the valid [1,5] range,
+// mapping the zero value (unset) to DefaultJudgeStrictness.
+func NormalizeStrictness(level int) int {
+	if level == 0 {
+		return DefaultJudgeStrictness
+	}
+	if level < 1 {
+		return 1
+	}
+	if level > 5 {
+		return 5
+	}
+	return level
+}
+
 // Task defines a single benchmark task.
 type Task struct {
 	ID              string
@@ -62,6 +81,7 @@ type Task struct {
 	ExpectedAnswer  string               // ScoringDeterministic: response must contain this string (case-insensitive)
 	FormatValidator func(string) float64 // ScoringFormat: returns 0.0–1.0
 	JudgeCriteria   []JudgeCriterion     // ScoringLLMJudge: each criterion is scored 0–10 independently; final score = average
+	JudgeStrictness int                  // ScoringLLMJudge: how harshly the judge grades (1=lenient … 5=strict); 0 = DefaultJudgeStrictness
 }
 
 // AllTasks returns the full task registry.
@@ -87,15 +107,16 @@ var registeredTasks = buildTasks()
 // ScoringFormat tasks store only the prompt here; their validator is looked up at runtime
 // via builtinFormatValidators keyed by TaskID.
 type BenchmarkTaskConfig struct {
-	TaskID         string           `json:"task_id"`
-	Category       string           `json:"category"`
-	Prompt         string           `json:"prompt"`
-	ScoringMethod  string           `json:"scoring_method"`
-	ExpectedAnswer string           `json:"expected_answer,omitempty"`
-	JudgeCriteria  []JudgeCriterion `json:"judge_criteria,omitempty"`
-	Enabled        bool             `json:"enabled"`
-	IsBuiltin      bool             `json:"is_builtin"`
-	UpdatedAt      string           `json:"updated_at,omitempty"`
+	TaskID          string           `json:"task_id"`
+	Category        string           `json:"category"`
+	Prompt          string           `json:"prompt"`
+	ScoringMethod   string           `json:"scoring_method"`
+	ExpectedAnswer  string           `json:"expected_answer,omitempty"`
+	JudgeCriteria   []JudgeCriterion `json:"judge_criteria,omitempty"`
+	JudgeStrictness int              `json:"judge_strictness,omitempty"`
+	Enabled         bool             `json:"enabled"`
+	IsBuiltin       bool             `json:"is_builtin"`
+	UpdatedAt       string           `json:"updated_at,omitempty"`
 }
 
 // builtinFormatValidators maps task IDs for ScoringFormat tasks to their Go validator functions.
@@ -117,14 +138,15 @@ func DefaultTaskConfigs() []BenchmarkTaskConfig {
 	cfgs := make([]BenchmarkTaskConfig, 0, len(registeredTasks))
 	for _, t := range registeredTasks {
 		cfgs = append(cfgs, BenchmarkTaskConfig{
-			TaskID:         t.ID,
-			Category:       string(t.Category),
-			Prompt:         t.Prompt,
-			ScoringMethod:  string(t.ScoringMethod),
-			ExpectedAnswer: t.ExpectedAnswer,
-			JudgeCriteria:  t.JudgeCriteria,
-			Enabled:        true,
-			IsBuiltin:      true,
+			TaskID:          t.ID,
+			Category:        string(t.Category),
+			Prompt:          t.Prompt,
+			ScoringMethod:   string(t.ScoringMethod),
+			ExpectedAnswer:  t.ExpectedAnswer,
+			JudgeCriteria:   t.JudgeCriteria,
+			JudgeStrictness: NormalizeStrictness(t.JudgeStrictness),
+			Enabled:         true,
+			IsBuiltin:       true,
 		})
 	}
 	return cfgs
@@ -140,12 +162,13 @@ func TasksFromConfigs(configs []BenchmarkTaskConfig) []Task {
 			continue
 		}
 		t := Task{
-			ID:             c.TaskID,
-			Category:       Category(c.Category),
-			Prompt:         c.Prompt,
-			ScoringMethod:  ScoringMethod(c.ScoringMethod),
-			ExpectedAnswer: c.ExpectedAnswer,
-			JudgeCriteria:  c.JudgeCriteria,
+			ID:              c.TaskID,
+			Category:        Category(c.Category),
+			Prompt:          c.Prompt,
+			ScoringMethod:   ScoringMethod(c.ScoringMethod),
+			ExpectedAnswer:  c.ExpectedAnswer,
+			JudgeCriteria:   c.JudgeCriteria,
+			JudgeStrictness: NormalizeStrictness(c.JudgeStrictness),
 		}
 		if t.ScoringMethod == ScoringFormat {
 			t.FormatValidator = builtinFormatValidators[c.TaskID]

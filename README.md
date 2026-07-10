@@ -167,6 +167,8 @@ See [SETUP.md](SETUP.md#authentication) for full configuration details.
 
 LLM-judge tasks use a configurable judge model (`BENCHMARK_JUDGE_PROVIDER` / `BENCHMARK_JUDGE_MODEL`). Each criterion is scored independently on a 0–10 scale; the final score is the average across all criteria. This gives fine-grained, continuous scores rather than binary pass/fail.
 
+Each LLM-judge task also has a **judge strictness** level from 1 (lenient) to 5 (strict), default 3. Strictness controls how harshly the judge grades: at level 1 it rewards answers that are roughly or partially correct, while at level 5 it only awards high scores for a near-perfect match to the criteria. Set it per task in the console's Config / Benchmarks section.
+
 Benchmark scores feed directly into routing decisions as the secondary signal after capability tags, pushing traffic toward models that empirically perform better on the types of tasks you actually run.
 
 ## Architecture

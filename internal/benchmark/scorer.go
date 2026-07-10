@@ -88,8 +88,10 @@ func (s *Scorer) scoreLLMJudge(ctx context.Context, task Task, response string) 
 	systemMsg := fmt.Sprintf(
 		"You are an objective AI response evaluator. Score each criterion independently on a scale of 0 to 10.\n"+
 			"Use the full range: 0=completely missing or wrong, 3=poor, 5=mediocre, 7=good, 9=excellent, 10=perfect.\n"+
+			"%s\n"+
 			"Return ONLY a JSON object in this exact format (no other text):\n"+
 			"{\"scores\": {%s}, \"reason\": \"<one sentence overall summary>\"}",
+		strictnessGuidance(task.JudgeStrictness),
 		strings.Join(exampleKeys, ", "),
 	)
 
@@ -190,6 +192,30 @@ func (s *Scorer) scoreLLMJudge(ctx context.Context, task Task, response string) 
 	normalised := (sum / float64(len(judgeResult.Scores))) / 10.0
 	log.Printf("benchmark: judge scores %v (avg=%.2f) for task %s — %s", judgeResult.Scores, normalised, task.ID, judgeResult.Reason)
 	return normalised
+}
+
+// strictnessGuidance returns a grading-severity instruction for the judge system prompt,
+// keyed by a task's JudgeStrictness level (1=lenient … 5=strict). The level is normalised
+// to [1,5] first, with the zero value mapped to the neutral default.
+func strictnessGuidance(level int) string {
+	switch NormalizeStrictness(level) {
+	case 1:
+		return "Grading severity: VERY LENIENT. Reward effort and partial correctness generously. " +
+			"Award high scores as long as the response is roughly on the right track or approximately correct. " +
+			"Do not penalise minor errors, omissions, style, or missing detail."
+	case 2:
+		return "Grading severity: LENIENT. Give the response the benefit of the doubt. " +
+			"Award high scores when the core of the answer is correct, treating small mistakes and omissions gently."
+	case 3:
+		return "Grading severity: BALANCED. Grade fairly and objectively, using the full range of scores. " +
+			"Reward what is correct and deduct proportionally for genuine errors or omissions."
+	case 4:
+		return "Grading severity: STRICT. Hold the response closely to each criterion. " +
+			"Penalise inaccuracies, omissions, and deviations from the ideal answer; only well-executed responses should score highly."
+	default: // 5
+		return "Grading severity: VERY STRICT. Demand near-perfect adherence to every criterion. " +
+			"Award high scores only when the response is essentially flawless and complete; any inaccuracy, omission, or deviation must substantially lower the score."
+	}
 }
 
 // buildOpenAIRequest builds the JSON payload and URL for an OpenAI-compatible judge request.

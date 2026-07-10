@@ -569,6 +569,8 @@ func (db *DB) initConfigSchema() error {
 		is_builtin     BOOLEAN NOT NULL DEFAULT TRUE,
 		updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 	);
+	ALTER TABLE benchmark_task_configs
+		ADD COLUMN IF NOT EXISTS judge_strictness INT NOT NULL DEFAULT 3;
 	CREATE TABLE IF NOT EXISTS system_prompts (
 		key        TEXT PRIMARY KEY,
 		value      TEXT NOT NULL,
@@ -605,6 +607,7 @@ func (db *DB) GetBenchmarkTaskConfigs() ([]benchmark.BenchmarkTaskConfig, error)
 	rows, err := db.Query(`
 		SELECT task_id, category, prompt, scoring_method,
 		       COALESCE(expected_answer,''), COALESCE(judge_criteria,'null'::jsonb),
+		       COALESCE(judge_strictness,3),
 		       enabled, is_builtin, updated_at
 		FROM benchmark_task_configs
 		ORDER BY category, task_id
@@ -622,6 +625,7 @@ func (db *DB) GetBenchmarkTaskConfigs() ([]benchmark.BenchmarkTaskConfig, error)
 		if err := rows.Scan(
 			&c.TaskID, &c.Category, &c.Prompt, &c.ScoringMethod,
 			&c.ExpectedAnswer, &criteriaJSON,
+			&c.JudgeStrictness,
 			&c.Enabled, &c.IsBuiltin, &updatedAt,
 		); err != nil {
 			log.Printf("db: error scanning benchmark task config row: %v", err)
@@ -644,18 +648,19 @@ func (db *DB) UpsertBenchmarkTaskConfig(cfg benchmark.BenchmarkTaskConfig) error
 	}
 	_, err = db.Exec(`
 		INSERT INTO benchmark_task_configs
-			(task_id, category, prompt, scoring_method, expected_answer, judge_criteria, enabled, is_builtin, updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,NOW())
+			(task_id, category, prompt, scoring_method, expected_answer, judge_criteria, judge_strictness, enabled, is_builtin, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,NOW())
 		ON CONFLICT (task_id) DO UPDATE SET
 			category       = EXCLUDED.category,
 			prompt         = EXCLUDED.prompt,
 			scoring_method = EXCLUDED.scoring_method,
 			expected_answer= EXCLUDED.expected_answer,
 			judge_criteria = EXCLUDED.judge_criteria,
+			judge_strictness = EXCLUDED.judge_strictness,
 			enabled        = EXCLUDED.enabled,
 			updated_at     = NOW()
 	`, cfg.TaskID, cfg.Category, cfg.Prompt, cfg.ScoringMethod,
-		cfg.ExpectedAnswer, string(criteriaJSON), cfg.Enabled, cfg.IsBuiltin)
+		cfg.ExpectedAnswer, string(criteriaJSON), benchmark.NormalizeStrictness(cfg.JudgeStrictness), cfg.Enabled, cfg.IsBuiltin)
 	if err != nil {
 		return fmt.Errorf("error upserting benchmark task config: %w", err)
 	}

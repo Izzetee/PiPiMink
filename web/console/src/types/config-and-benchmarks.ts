@@ -18,7 +18,8 @@ export interface BenchmarkTask {
   judgeCriteria: JudgeCriterion[] | null
   /** Used by deterministic: the exact expected answer */
   expectedAnswer: string | null
-  difficulty: number
+  /** Used by llm-judge: how harshly the judge grades (1=lenient … 5=strict) */
+  judgeStrictness: number
   enabled: boolean
   builtin: boolean
   resultCount: number
