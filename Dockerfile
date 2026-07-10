@@ -45,8 +45,12 @@ WORKDIR /app
 COPY --from=builder /app/pipimink .
 
 # Copy any required configuration files
+# .env.example / providers.example.json are always tracked; real .env and
+# providers.json are optional (gitignored) and normally supplied at runtime via
+# bind mounts. Listing a guaranteed-present file keeps the COPY from failing in CI
+# builds where the real files are absent.
 COPY --from=builder /app/.env* ./
-COPY --from=builder /app/providers.json* ./
+COPY --from=builder /app/providers.example.json /app/providers.json* ./
 
 # Copy static assets for serving
 COPY --from=builder /app/assets ./assets

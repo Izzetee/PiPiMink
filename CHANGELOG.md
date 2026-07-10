@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Release automation: pushing a `v*.*.*` tag (or running the `Release` workflow manually) now builds a multi-arch Docker image (`linux/amd64`, `linux/arm64`), publishes it to the GitHub Container Registry (`ghcr.io/izzetee/pipimink`) with `vX.Y.Z`, `X.Y`, and `latest` tags, and creates a GitHub Release with notes extracted from this changelog.
+
 ## [0.6.0] — Authentication, Console & Judge Strictness
 
 ### Added
