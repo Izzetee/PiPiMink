@@ -95,6 +95,7 @@ flowchart TD
     R -->|Serverless-API models\nMistral · Llama · Phi · Cohere · DeepSeek| P1["/models/chat/completions\n?api-version=2024-05-01-preview"]
     R -->|Anthropic models\nClaude family| P2["/anthropic/v1/messages"]
     R -->|Project-scoped OpenAI models\nGPT-4o · o-series| P3["/api/projects/MY-PROJECT\n/openai/v1/chat/completions"]
+    R -->|Responses-API OpenAI models\ngpt-5.x · newer o-series| P4["/openai/v1/responses"]
 ```
 
 | Pattern | Models | `type` | Path in `chat_path` |
@@ -102,6 +103,7 @@ flowchart TD
 | **Serverless-API** | Mistral, Llama, Phi, Cohere, DeepSeek, … | `openai-compatible` | `/models/chat/completions?api-version=2024-05-01-preview` |
 | **Anthropic** | Claude family | `anthropic` | *(not needed — set `base_url` to `…/anthropic`)* |
 | **Project-scoped** | GPT-4o, o-series | `openai-compatible` | `/api/projects/YOUR-PROJECT/openai/v1/chat/completions` |
+| **Responses-API** | gpt-5.x, newer OpenAI models | `openai-responses` | `/openai/v1/responses` |
 
 #### Configuration
 
@@ -140,6 +142,12 @@ flowchart TD
       "name": "gpt-4o",
       "chat_path": "/api/projects/MY-PROJECT/openai/v1/chat/completions",
       "api_key_env": "AZURE_FOUNDRY_GPT4O_API_KEY"
+    },
+    {
+      "name": "gpt-5",
+      "type": "openai-responses",
+      "chat_path": "/openai/v1/responses",
+      "api_key_env": "AZURE_FOUNDRY_GPT5_API_KEY"
     }
   ]
 }
@@ -155,6 +163,7 @@ AZURE_FOUNDRY_PHI4_API_KEY=xK9mNpLw...
 AZURE_FOUNDRY_LLAMA_API_KEY=tR3vQsYz...
 AZURE_FOUNDRY_CLAUDE_OPUS_API_KEY=aB7cDeFg...
 AZURE_FOUNDRY_GPT4O_API_KEY=hI2jKlMn...
+AZURE_FOUNDRY_GPT5_API_KEY=oP4qRsTu...
 ```
 
 **Step 3 — Discover and tag as usual:**
@@ -168,6 +177,7 @@ In the [Azure AI Foundry portal](https://ai.azure.com):
 - **Serverless-API models** (Mistral, Llama, Phi, etc.): go to **Models + endpoints**, select the deployment — the endpoint URL and key are shown on the detail page.
 - **Anthropic models**: same location; the URL ends with `/anthropic/v1/messages`. Use everything before `/v1/messages` as `base_url` in the model config.
 - **Project-scoped models** (GPT, o-series): go to **My assets → Models + endpoints** inside your project — copy the endpoint. The path starts with `/api/projects/YOUR-PROJECT/openai/v1/`.
+- **Responses-API models** (gpt-5.x and newer OpenAI models): these are served from the resource-level `/openai/v1/responses` endpoint. Set `type` to `openai-responses` and `chat_path` to `/openai/v1/responses`. PiPiMink sends the prompt in the `input` field and reads the answer from the `output` array. If you only override `chat_path` to a `/responses` path without setting the type, PiPiMink still auto-detects and uses the Responses API.
 
 ## 3. Start the stack
 

@@ -109,6 +109,7 @@ Routing decisions are cached in memory using a hash of the normalized prompt and
 | Type | Examples |
 | --- | --- |
 | `openai-compatible` | OpenAI, Gemini, OpenRouter, LM Studio, any local server (Ollama, llama.cpp, MLX) |
+| `openai-responses` | OpenAI Responses API endpoints (e.g. Azure AI Foundry `/openai/v1/responses`) |
 | `anthropic` | Anthropic Claude (uses the native Messages API) |
 
 Azure AI Foundry is supported via per-model `model_configs` entries. See [SETUP.md](SETUP.md#microsoft-azure-ai-foundry) for details.

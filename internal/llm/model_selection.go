@@ -178,8 +178,8 @@ func (c *Client) DecideModelBasedOnCapabilities(message string, availableModels 
 	var jsonPayload []byte
 	var endpoint string
 
-	switch selProvider.Type {
-	case config.ProviderTypeAnthropic:
+	switch {
+	case selProvider.Type == config.ProviderTypeAnthropic:
 		maxTokens := c.Config.AnthropicMaxTokens
 		if maxTokens <= 0 {
 			maxTokens = 12800
@@ -194,6 +194,13 @@ func (c *Client) DecideModelBasedOnCapabilities(message string, availableModels 
 		}
 		jsonPayload, err = json.Marshal(payload)
 		endpoint = selProvider.BaseURL + "/v1/messages"
+	case selProvider.UsesResponsesAPI():
+		payload := buildResponsesPayload(selectionModel, []map[string]interface{}{
+			{"role": "system", "content": systemMessage},
+			{"role": "user", "content": message},
+		}, responsesRequestOptions{})
+		jsonPayload, err = json.Marshal(payload)
+		endpoint = selProvider.ResponsesURL()
 	default:
 		payload := map[string]interface{}{
 			"model":       selectionModel,
@@ -249,11 +256,16 @@ func (c *Client) DecideModelBasedOnCapabilities(message string, availableModels 
 
 	// Extract text content from the response based on provider type.
 	var content string
-	switch selProvider.Type {
-	case config.ProviderTypeAnthropic:
+	switch {
+	case selProvider.Type == config.ProviderTypeAnthropic:
 		content, err = extractAnthropicContent(responseBody.Bytes())
 		if err != nil {
 			return errResult(fmt.Errorf("error extracting content from Anthropic response: %w", err))
+		}
+	case selProvider.UsesResponsesAPI():
+		content, err = extractResponsesContent(responseBody.Bytes())
+		if err != nil {
+			return errResult(fmt.Errorf("error extracting content from Responses API response: %w", err))
 		}
 	default:
 		content, err = extractOpenAISelectionContent(responseBody.Bytes())

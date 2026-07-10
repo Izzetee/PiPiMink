@@ -1,6 +1,11 @@
 package llm
 
 import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -91,4 +96,44 @@ func TestChatWithModel(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "This is a test response", response)
 	})
+}
+
+func TestChatWithModelResponsesAPI(t *testing.T) {
+	var gotPath string
+	var gotBody map[string]interface{}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"responses answer"}]}]}`))
+	}))
+	defer server.Close()
+
+	cfg := &config.Config{
+		Providers: []config.ProviderConfig{
+			{
+				Name:    "az-foundry",
+				Type:    config.ProviderTypeOpenAICompatible,
+				BaseURL: server.URL,
+				Timeout: 5 * time.Second,
+				ModelConfigs: []config.ModelConfig{
+					{Name: "gpt-5", Type: config.ProviderTypeOpenAIResponses, ChatPath: "/openai/v1/responses", APIKey: "test-key"},
+				},
+			},
+		},
+	}
+	client := NewClient(cfg)
+
+	modelInfo := models.ModelInfo{Source: "az-foundry", Enabled: true}
+	response, err := client.ChatWithModel(modelInfo, "gpt-5", []map[string]interface{}{
+		{"role": "user", "content": "Hello"},
+	})
+
+	assert.NoError(t, err)
+	assert.Equal(t, "responses answer", response)
+	assert.True(t, strings.HasSuffix(gotPath, "/openai/v1/responses"), "must hit the Responses endpoint, got %s", gotPath)
+	assert.Contains(t, gotBody, "input", "request must use 'input'")
+	assert.NotContains(t, gotBody, "messages", "request must not use 'messages'")
 }

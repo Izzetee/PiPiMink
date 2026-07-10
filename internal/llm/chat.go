@@ -35,9 +35,11 @@ func (c *Client) ChatWithModel(modelInfo models.ModelInfo, model string, message
 		defer rl.UpdateLastRequestTime()
 	}
 
-	switch p.Type {
-	case config.ProviderTypeAnthropic:
+	switch {
+	case p.Type == config.ProviderTypeAnthropic:
 		return c.chatWithAnthropicModel(p, model, messages)
+	case p.UsesResponsesAPI():
+		return c.chatWithOpenAIResponsesModel(p, model, messages)
 	default:
 		return c.chatWithOpenAICompatibleModel(p, model, messages)
 	}
@@ -143,7 +145,37 @@ func (c *Client) chatWithOpenAICompatibleModel(p config.ProviderConfig, model st
 	return content, nil
 }
 
-// chatWithAnthropicModel sends a chat request using the Anthropic Messages API.
+// chatWithOpenAIResponsesModel sends a chat request using the OpenAI Responses API.
+// The conversation is passed in "input" and the answer is read from the "output" array.
+// temperature and max_output_tokens are omitted so reasoning models (o-series, gpt-5.x)
+// are not rejected and are free to allocate their own output budget.
+func (c *Client) chatWithOpenAIResponsesModel(p config.ProviderConfig, model string, messages []map[string]interface{}) (string, error) {
+	url := p.ResponsesURL()
+	payload := buildResponsesPayload(model, messages, responsesRequestOptions{})
+
+	log.Printf("Sending Responses API chat request to %s for model %s", url, model)
+	body, status, err := sendResponsesRequest(url, p.APIKey, payload, p.Timeout)
+	if err != nil {
+		return "", err
+	}
+	log.Printf("Received Responses API response with status code: %d", status)
+	log.Printf("Raw Responses API response: %s", string(body))
+
+	if status >= 400 {
+		if msg := extractAPIErrorMessage(body); msg != "" {
+			return "", fmt.Errorf("Responses API error (HTTP %d): %s", status, msg)
+		}
+		return "", fmt.Errorf("Responses API returned HTTP %d", status)
+	}
+
+	content, err := extractResponsesContent(body)
+	if err != nil {
+		return "", err
+	}
+	log.Printf("Successfully extracted Responses API content (%d characters)", len(content))
+	return content, nil
+}
+
 // It converts the OpenAI-format messages array into Anthropic's format:
 // system messages are extracted to the top-level "system" field; all other
 // messages are kept in the messages array with only "user" and "assistant" roles.

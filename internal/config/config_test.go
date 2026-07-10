@@ -111,3 +111,48 @@ func TestSaveProvidersRoundTripAndOverwrite(t *testing.T) {
 	assert.Equal(t, "claude-haiku-4-5", got[1].ModelConfigs[0].Name)
 	assert.Equal(t, ProviderTypeAnthropic, got[1].ModelConfigs[0].Type)
 }
+
+func TestUsesResponsesAPI(t *testing.T) {
+	// Explicit type.
+	p := ProviderConfig{Type: ProviderTypeOpenAIResponses, BaseURL: "https://x"}
+	assert.True(t, p.UsesResponsesAPI())
+
+	// Auto-detected via chat path.
+	p = ProviderConfig{Type: ProviderTypeOpenAICompatible, ChatPath: "/openai/v1/responses"}
+	assert.True(t, p.UsesResponsesAPI())
+
+	// Plain chat completions provider must not be treated as Responses API.
+	p = ProviderConfig{Type: ProviderTypeOpenAICompatible, ChatPath: "/v1/chat/completions"}
+	assert.False(t, p.UsesResponsesAPI())
+
+	p = ProviderConfig{Type: ProviderTypeOpenAICompatible}
+	assert.False(t, p.UsesResponsesAPI())
+}
+
+func TestResponsesURL(t *testing.T) {
+	// Default path.
+	p := ProviderConfig{Type: ProviderTypeOpenAIResponses, BaseURL: "https://api.openai.com"}
+	assert.Equal(t, "https://api.openai.com/v1/responses", p.ResponsesURL())
+
+	// Explicit chat path override (Azure AI Foundry).
+	p = ProviderConfig{
+		Type:     ProviderTypeOpenAIResponses,
+		BaseURL:  "https://x.services.ai.azure.com",
+		ChatPath: "/openai/v1/responses",
+	}
+	assert.Equal(t, "https://x.services.ai.azure.com/openai/v1/responses", p.ResponsesURL())
+}
+
+func TestForModelAppliesResponsesTypeOverride(t *testing.T) {
+	p := ProviderConfig{
+		Name:    "az-foundry",
+		Type:    ProviderTypeOpenAICompatible,
+		BaseURL: "https://x.services.ai.azure.com",
+		ModelConfigs: []ModelConfig{
+			{Name: "gpt-5", Type: ProviderTypeOpenAIResponses, ChatPath: "/openai/v1/responses"},
+		},
+	}
+	resolved := p.ForModel("gpt-5")
+	assert.True(t, resolved.UsesResponsesAPI())
+	assert.Equal(t, "https://x.services.ai.azure.com/openai/v1/responses", resolved.ResponsesURL())
+}

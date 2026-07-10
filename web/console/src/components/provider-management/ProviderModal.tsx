@@ -88,6 +88,7 @@ export function ProviderModal({ provider, onSave, onClose }: ProviderModalProps)
               className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 transition-colors"
             >
               <option value="openai-compatible">openai-compatible</option>
+              <option value="openai-responses">openai-responses</option>
               <option value="anthropic">anthropic</option>
             </select>
           </div>

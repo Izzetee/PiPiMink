@@ -81,6 +81,12 @@
         "name": "gpt-4o",
         "chat_path": "/api/projects/YOUR-PROJECT-NAME/openai/v1/chat/completions",
         "api_key_env": "AZURE_FOUNDRY_GPT4O_API_KEY"
+      },
+      {
+        "name": "gpt-5",
+        "type": "openai-responses",
+        "chat_path": "/openai/v1/responses",
+        "api_key_env": "AZURE_FOUNDRY_GPT5_API_KEY"
       }
     ]
   }

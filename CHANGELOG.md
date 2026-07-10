@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Azure AI Foundry OpenAI models via the **Responses API** (`/openai/v1/responses`): new provider type `openai-responses` (plus auto-detection when a `chat_path` targets `/responses`). Requests use the `input` field and responses are parsed from the `output` array, so Foundry OpenAI deployments (e.g. `gpt-5.x`) can be tagged, routed, chatted, and benchmarked. `temperature` and `max_output_tokens` are omitted by default so reasoning models are not rejected. The console UI exposes the new type in the provider and per-model selectors. Fixes #47.
 - 3-tier authentication model: Public (unauthenticated), User (session or Bearer token), Admin (X-API-Key or admin session)
   - Centralized auth middleware enforces tiers on all routes — new handlers must not perform inline auth checks
   - Bearer token support: per-user API tokens for programmatic access (`POST /auth/tokens`, `GET /auth/tokens`, `DELETE /auth/tokens/{id}`)

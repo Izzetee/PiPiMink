@@ -102,9 +102,11 @@ func (s *Scorer) scoreLLMJudge(ctx context.Context, task Task, response string) 
 	var url string
 	var err error
 
-	switch s.judgeProvider.Type {
-	case config.ProviderTypeAnthropic:
+	switch {
+	case s.judgeProvider.Type == config.ProviderTypeAnthropic:
 		body, url, err = s.buildAnthropicRequest(systemMsg, userMsg)
+	case s.judgeProvider.UsesResponsesAPI():
+		body, url, err = s.buildResponsesRequest(systemMsg, userMsg)
 	default:
 		body, url, err = s.buildOpenAIRequest(systemMsg, userMsg)
 	}
@@ -207,6 +209,24 @@ func (s *Scorer) buildOpenAIRequest(systemMsg, userMsg string) ([]byte, string, 
 	return body, s.judgeProvider.ChatCompletionsURL(), nil
 }
 
+// buildResponsesRequest builds the JSON payload and URL for an OpenAI Responses API judge
+// request. The prompt is sent in "input"; temperature and max_output_tokens are omitted so
+// reasoning models are not rejected.
+func (s *Scorer) buildResponsesRequest(systemMsg, userMsg string) ([]byte, string, error) {
+	payload := map[string]interface{}{
+		"model": s.judgeModel,
+		"input": []map[string]interface{}{
+			{"role": "system", "content": systemMsg},
+			{"role": "user", "content": userMsg},
+		},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, "", err
+	}
+	return body, s.judgeProvider.ResponsesURL(), nil
+}
+
 // buildAnthropicRequest builds the JSON payload and URL for an Anthropic Messages API judge request.
 func (s *Scorer) buildAnthropicRequest(systemMsg, userMsg string) ([]byte, string, error) {
 	payload := map[string]interface{}{
@@ -225,11 +245,13 @@ func (s *Scorer) buildAnthropicRequest(systemMsg, userMsg string) ([]byte, strin
 }
 
 // extractJudgeContent extracts the text content from a judge API response,
-// handling both OpenAI and Anthropic response formats.
+// handling OpenAI Chat Completions, OpenAI Responses, and Anthropic response formats.
 func (s *Scorer) extractJudgeContent(body []byte) (string, error) {
-	switch s.judgeProvider.Type {
-	case config.ProviderTypeAnthropic:
+	switch {
+	case s.judgeProvider.Type == config.ProviderTypeAnthropic:
 		return extractAnthropicContent(body)
+	case s.judgeProvider.UsesResponsesAPI():
+		return extractResponsesContent(body)
 	default:
 		return extractOpenAIContent(body)
 	}
@@ -251,6 +273,50 @@ func extractOpenAIContent(body []byte) (string, error) {
 		return "", fmt.Errorf("missing or empty choices in OpenAI response")
 	}
 	return apiResp.Choices[0].Message.Content, nil
+}
+
+// extractResponsesContent extracts text from an OpenAI Responses API response.
+// It concatenates every "output_text" part in "message" items, honours a top-level
+// "output_text" convenience field, and surfaces API errors.
+func extractResponsesContent(body []byte) (string, error) {
+	var apiResp struct {
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+		OutputText string `json:"output_text"`
+		Output     []struct {
+			Type    string `json:"type"`
+			Content []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"output"`
+	}
+	if err := json.Unmarshal(body, &apiResp); err != nil {
+		return "", fmt.Errorf("error decoding Responses API response: %w", err)
+	}
+	if apiResp.Error != nil && apiResp.Error.Message != "" {
+		return "", fmt.Errorf("Responses API error: %s", apiResp.Error.Message)
+	}
+	var sb strings.Builder
+	for _, item := range apiResp.Output {
+		if item.Type != "message" {
+			continue
+		}
+		for _, part := range item.Content {
+			if part.Type == "output_text" {
+				sb.WriteString(part.Text)
+			}
+		}
+	}
+	text := sb.String()
+	if text == "" {
+		text = apiResp.OutputText
+	}
+	if text == "" {
+		return "", fmt.Errorf("missing text in Responses API output")
+	}
+	return text, nil
 }
 
 // extractAnthropicContent extracts text from an Anthropic Messages API response.

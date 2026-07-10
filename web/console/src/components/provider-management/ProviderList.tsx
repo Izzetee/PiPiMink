@@ -15,6 +15,12 @@ function typeBadge(type: string): { label: string; bg: string; text: string } {
         bg: 'bg-amber-50 dark:bg-amber-900/30',
         text: 'text-amber-700 dark:text-amber-300',
       }
+    case 'openai-responses':
+      return {
+        label: 'OpenAI Responses',
+        bg: 'bg-violet-50 dark:bg-violet-900/30',
+        text: 'text-violet-700 dark:text-violet-300',
+      }
     default:
       return {
         label: 'OpenAI',

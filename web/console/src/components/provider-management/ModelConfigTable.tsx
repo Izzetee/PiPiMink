@@ -81,6 +81,7 @@ function ConfigForm({
         >
           <option value="">Inherit from provider</option>
           <option value="openai-compatible">openai-compatible</option>
+          <option value="openai-responses">openai-responses</option>
           <option value="anthropic">anthropic</option>
         </select>
       </div>
@@ -113,6 +114,11 @@ function ConfigForm({
           placeholder="/models/chat/completions?api-version=..."
           className="w-full px-2.5 py-1.5 text-sm font-mono rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
         />
+        <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">
+          Azure AI Foundry OpenAI (Responses API): set type to{' '}
+          <span className="font-mono">openai-responses</span> and path to{' '}
+          <span className="font-mono">/openai/v1/responses</span>.
+        </p>
       </div>
 
       <div>

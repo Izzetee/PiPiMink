@@ -15,7 +15,8 @@ import (
 
 // ProviderType defines the API format a provider speaks.
 const (
-	ProviderTypeOpenAICompatible = "openai-compatible" // OpenAI, Gemini, OpenRouter, local, Azure AI Foundry
+	ProviderTypeOpenAICompatible = "openai-compatible" // OpenAI, Gemini, OpenRouter, local, Azure AI Foundry (Chat Completions)
+	ProviderTypeOpenAIResponses  = "openai-responses"  // OpenAI Responses API (input/output), e.g. Azure AI Foundry /openai/v1/responses
 	ProviderTypeAnthropic        = "anthropic"         // Anthropic Claude models
 )
 
@@ -93,6 +94,30 @@ func (p ProviderConfig) ChatCompletionsURL() string {
 		return p.BaseURL + p.ChatPath
 	}
 	return p.BaseURL + "/v1/chat/completions"
+}
+
+// UsesResponsesAPI reports whether requests to this provider/model must use the
+// OpenAI Responses API format (input/output) rather than Chat Completions
+// (messages/choices).
+//
+// It is true when the provider type is explicitly "openai-responses", or when the
+// configured chat path targets a "/responses" endpoint. The path-based check makes
+// existing configs that only override chat_path work without a type change, and
+// keeps PiPiMink forward-compatible as more providers migrate to the Responses API.
+func (p ProviderConfig) UsesResponsesAPI() bool {
+	if p.Type == ProviderTypeOpenAIResponses {
+		return true
+	}
+	return strings.Contains(p.ChatPath, "/responses")
+}
+
+// ResponsesURL returns the full URL for the OpenAI Responses API endpoint.
+// If ChatPath is set it overrides the default /v1/responses path.
+func (p ProviderConfig) ResponsesURL() string {
+	if p.ChatPath != "" {
+		return p.BaseURL + p.ChatPath
+	}
+	return p.BaseURL + "/v1/responses"
 }
 
 // OAuthEnabled returns true when all required OAuth fields are configured.
