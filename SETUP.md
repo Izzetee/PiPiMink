@@ -311,6 +311,12 @@ Scoring methods:
 | `BENCHMARK_SCHEDULE_ENABLED` | `false` | Run benchmarks automatically on a schedule |
 | `BENCHMARK_SCHEDULE_INTERVAL` | `24h` | Interval between scheduled benchmark runs |
 
+### Providers
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `ANTHROPIC_MAX_TOKENS` | `12800` | Max output tokens for Anthropic (Messages API) chat, judge, and routing requests. Extended-thinking models count thinking tokens toward this budget, so keep it generous — too low truncates the response before any answer text is produced. |
+
 ## Observability
 
 - Prometheus metrics: `GET /metrics`

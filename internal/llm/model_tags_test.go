@@ -137,6 +137,14 @@ func TestExtractAnthropicContent(t *testing.T) {
 		assert.Contains(t, err.Error(), "model refused the request")
 		assert.Contains(t, err.Error(), "cyber content")
 	})
+
+	t.Run("Max tokens truncation with only thinking block", func(t *testing.T) {
+		body := []byte(`{"content":[{"type":"thinking","thinking":"lots of reasoning"}],"stop_reason":"max_tokens"}`)
+		_, err := extractAnthropicContent(body)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "max_tokens")
+		assert.Contains(t, err.Error(), "ANTHROPIC_MAX_TOKENS")
+	})
 }
 
 func TestDisableModelsWithEmptyTags(t *testing.T) {

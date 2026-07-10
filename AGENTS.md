@@ -138,6 +138,7 @@ Azure AI Foundry: one `ProviderConfig` entry per deployment, with `"models": ["m
 | `BENCHMARK_JUDGE_PROVIDER` | (selection provider) |
 | `BENCHMARK_JUDGE_MODEL` | (selection model) |
 | `BENCHMARK_CONCURRENCY` | `3` |
+| `ANTHROPIC_MAX_TOKENS` | `12800` (max output tokens for Anthropic chat/judge/routing; extended-thinking tokens count toward it) |
 | `SELECTION_CACHE_ENABLED` | `true` |
 | `SELECTION_CACHE_TTL` | `2m` |
 | `SELECTION_CACHE_MAX_ENTRIES` | `1000` |

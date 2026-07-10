@@ -113,6 +113,8 @@ Routing decisions are cached in memory using a hash of the normalized prompt and
 
 Azure AI Foundry is supported via per-model `model_configs` entries. See [SETUP.md](SETUP.md#microsoft-azure-ai-foundry) for details.
 
+> Extended-thinking Claude models count their reasoning tokens toward the output budget. If answers get cut off, raise `ANTHROPIC_MAX_TOKENS` (default `12800`).
+
 ## Exposed APIs
 
 PiPiMink is a drop-in proxy. Existing clients require no changes:

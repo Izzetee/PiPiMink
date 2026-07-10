@@ -169,9 +169,14 @@ func (c *Client) chatWithAnthropicModel(p config.ProviderConfig, model string, m
 		}
 	}
 
+	maxTokens := c.Config.AnthropicMaxTokens
+	if maxTokens <= 0 {
+		maxTokens = 12800
+	}
+
 	payload := map[string]interface{}{
 		"model":      model,
-		"max_tokens": 4096,
+		"max_tokens": maxTokens,
 		"messages":   anthropicMessages,
 	}
 	if len(systemParts) > 0 {

@@ -501,6 +501,11 @@ func extractAnthropicContent(body []byte) (string, error) {
 			return text, nil
 		}
 	}
+	// A max_tokens stop with no text block means extended thinking consumed the
+	// entire output budget before producing an answer. Surface it distinctly.
+	if stop, _ := result["stop_reason"].(string); stop == "max_tokens" {
+		return "", fmt.Errorf("response truncated at max_tokens before any text was produced (extended thinking consumed the token budget) — increase ANTHROPIC_MAX_TOKENS")
+	}
 	return "", fmt.Errorf("missing text in Anthropic content block")
 }
 

@@ -131,6 +131,9 @@ type Config struct {
 	BenchmarkJudgeModel       string // model for LLM judge (defaults to MODEL_SELECTION_MODEL)
 	BenchmarkConcurrency      int    // max parallel model benchmark runs (default 3)
 
+	// Anthropic
+	AnthropicMaxTokens int // max_tokens for Anthropic Messages API chat requests (default 12800). Extended-thinking models count thinking tokens toward this budget, so keep it generous.
+
 	// Persistence
 	DatabaseURL                   string
 	DatabaseMaxConnections        int
@@ -207,6 +210,7 @@ func Load() (*Config, error) {
 		BenchmarkJudgeProvider:         getEnv("BENCHMARK_JUDGE_PROVIDER", ""),
 		BenchmarkJudgeModel:            getEnv("BENCHMARK_JUDGE_MODEL", ""),
 		BenchmarkConcurrency:           getEnvInt("BENCHMARK_CONCURRENCY", 3),
+		AnthropicMaxTokens:             getEnvInt("ANTHROPIC_MAX_TOKENS", 12800),
 		OTelEnabled:                    getEnvBool("OTEL_ENABLED", false),
 		OTelServiceName:                getEnv("OTEL_SERVICE_NAME", "pipimink"),
 		OTelExporterOTLPEndpoint:       getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:4318"),
