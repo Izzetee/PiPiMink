@@ -66,7 +66,7 @@ func TestDecideModelBasedOnCapabilitiesWithAnthropicProvider(t *testing.T) {
 		err := json.NewDecoder(r.Body).Decode(&payload)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, payload["system"], "system message should be top-level field")
-		assert.Equal(t, float64(4096), payload["max_tokens"])
+		assert.Equal(t, float64(12800), payload["max_tokens"])
 		msgs := payload["messages"].([]interface{})
 		assert.Len(t, msgs, 1, "should have only user message, no system message in messages array")
 		firstMsg := msgs[0].(map[string]interface{})

@@ -17,15 +17,21 @@ import (
 type Scorer struct {
 	judgeProvider config.ProviderConfig // resolved provider config (with per-model overrides applied)
 	judgeModel    string
+	maxTokens     int // max_tokens for Anthropic judge requests
 	httpClient    *http.Client
 }
 
 // NewScorer creates a scorer backed by the given judge model endpoint.
 // The provider config should already have per-model overrides applied via ForModel().
-func NewScorer(judgeProvider config.ProviderConfig, judgeModel string) *Scorer {
+// maxTokens sets the Anthropic max_tokens budget; values <= 0 fall back to 12800.
+func NewScorer(judgeProvider config.ProviderConfig, judgeModel string, maxTokens int) *Scorer {
+	if maxTokens <= 0 {
+		maxTokens = 12800
+	}
 	return &Scorer{
 		judgeProvider: judgeProvider,
 		judgeModel:    judgeModel,
+		maxTokens:     maxTokens,
 		httpClient:    &http.Client{Timeout: judgeProvider.Timeout},
 	}
 }
@@ -205,7 +211,7 @@ func (s *Scorer) buildOpenAIRequest(systemMsg, userMsg string) ([]byte, string, 
 func (s *Scorer) buildAnthropicRequest(systemMsg, userMsg string) ([]byte, string, error) {
 	payload := map[string]interface{}{
 		"model":      s.judgeModel,
-		"max_tokens": 4096,
+		"max_tokens": s.maxTokens,
 		"system":     systemMsg,
 		"messages": []map[string]string{
 			{"role": "user", "content": userMsg},
@@ -284,6 +290,9 @@ func extractAnthropicContent(body []byte) (string, error) {
 		if block.Text != "" {
 			return block.Text, nil
 		}
+	}
+	if result.StopReason == "max_tokens" {
+		return "", fmt.Errorf("response truncated at max_tokens before any text was produced (extended thinking consumed the token budget) — increase ANTHROPIC_MAX_TOKENS")
 	}
 	return "", fmt.Errorf("missing text in Anthropic content block")
 }

@@ -180,9 +180,13 @@ func (c *Client) DecideModelBasedOnCapabilities(message string, availableModels 
 
 	switch selProvider.Type {
 	case config.ProviderTypeAnthropic:
+		maxTokens := c.Config.AnthropicMaxTokens
+		if maxTokens <= 0 {
+			maxTokens = 12800
+		}
 		payload := map[string]interface{}{
 			"model":      selectionModel,
-			"max_tokens": 4096,
+			"max_tokens": maxTokens,
 			"system":     systemMessage,
 			"messages": []map[string]string{
 				{"role": "user", "content": message},

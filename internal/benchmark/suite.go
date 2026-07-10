@@ -44,7 +44,7 @@ func NewSuite(db DB, cfg *config.Config, chatFn ChatFunc) *Suite {
 	return &Suite{
 		db:     db,
 		cfg:    cfg,
-		scorer: NewScorer(judgeProvider, judgeModel),
+		scorer: NewScorer(judgeProvider, judgeModel, cfg.AnthropicMaxTokens),
 		chatFn: chatFn,
 	}
 }
