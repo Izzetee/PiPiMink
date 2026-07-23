@@ -43,7 +43,10 @@ func (c *Client) extractJSON(message string) string {
 			}
 		}
 
-		// If no valid JSON in code blocks, search for { and } in the message
+		// If no valid JSON in code blocks, search for the first complete JSON object.
+		if candidate := firstJSONObject(message); candidate != "" {
+			return candidate
+		}
 		jsonStart = strings.Index(message, "{")
 		jsonEnd = strings.LastIndex(message, "}")
 	} else {
@@ -53,7 +56,12 @@ func (c *Client) extractJSON(message string) string {
 			return message
 		}
 
-		// If not valid JSON, find JSON-like content
+		// If not valid JSON, prefer the first complete object. Models occasionally
+		// emit a correct answer and then leak another chat-template turn.
+		if candidate := firstJSONObject(message); candidate != "" {
+			log.Println("Successfully extracted first valid JSON object from response")
+			return candidate
+		}
 		jsonStart = strings.Index(message, "{")
 		jsonEnd = strings.LastIndex(message, "}")
 	}
@@ -81,4 +89,50 @@ func (c *Client) extractJSON(message string) string {
 	// Return empty JSON structure if we couldn't find valid JSON
 	log.Println("Failed to extract valid JSON from response, returning empty JSON")
 	return "{\"strengths\":[], \"weaknesses\":[]}"
+}
+
+// firstJSONObject returns the first syntactically valid JSON object in text. It tracks
+// quoted strings and escapes so braces inside tag values do not terminate the object.
+func firstJSONObject(text string) string {
+	for start := strings.IndexByte(text, '{'); start >= 0; {
+		depth := 0
+		inString := false
+		escaped := false
+	scanCandidate:
+		for i := start; i < len(text); i++ {
+			ch := text[i]
+			if inString {
+				if escaped {
+					escaped = false
+				} else if ch == '\\' {
+					escaped = true
+				} else if ch == '"' {
+					inString = false
+				}
+				continue
+			}
+			switch ch {
+			case '"':
+				inString = true
+			case '{':
+				depth++
+			case '}':
+				depth--
+				if depth == 0 {
+					candidate := text[start : i+1]
+					var value map[string]interface{}
+					if json.Unmarshal([]byte(candidate), &value) == nil {
+						return candidate
+					}
+					break scanCandidate
+				}
+			}
+		}
+		next := strings.IndexByte(text[start+1:], '{')
+		if next < 0 {
+			break
+		}
+		start += next + 1
+	}
+	return ""
 }
