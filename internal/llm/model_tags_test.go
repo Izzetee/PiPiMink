@@ -1,6 +1,9 @@
 package llm
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -101,6 +104,37 @@ func TestGetModelTags(t *testing.T) {
 		assert.False(t, shouldDisable)
 		assert.True(t, shouldDelete)
 	})
+}
+
+func TestGetModelTagsLimitsOpenAICompatibleOutput(t *testing.T) {
+	var received map[string]interface{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&received))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"strengths\":[\"code-generation\"],\"weaknesses\":[\"real-time-information\"]}"}}]}`))
+	}))
+	defer srv.Close()
+
+	p := config.ProviderConfig{
+		Name:    "lm-studio",
+		Type:    config.ProviderTypeOpenAICompatible,
+		BaseURL: srv.URL,
+		Timeout: 5 * time.Second,
+	}
+	client := NewClient(&config.Config{
+		Providers:        []config.ProviderConfig{p},
+		TaggingMaxTokens: 321,
+	})
+
+	_, _, _, err := client.GetModelTags("zai-org/glm-4.7-flash", p)
+	assert.NoError(t, err)
+	assert.Equal(t, float64(321), received["max_tokens"])
+	assert.Equal(t, []interface{}{tagsStopSequence}, received["stop"])
+}
+
+func TestTaggingMaxTokensDefault(t *testing.T) {
+	client := NewClient(&config.Config{})
+	assert.Equal(t, defaultTagsMaxTokens, client.taggingMaxTokens())
 }
 
 func TestExtractAnthropicContent(t *testing.T) {

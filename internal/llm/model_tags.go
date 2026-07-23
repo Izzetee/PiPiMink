@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	anthropicVersion = "2023-06-01"
-	tagsMaxTokens    = 1024
+	anthropicVersion     = "2023-06-01"
+	defaultTagsMaxTokens = 1024
+	tagsStopSequence     = "<|user|>"
 
 	// tagsSystemPrompt instructs the model on how to produce routing-useful capability tags.
 	// Key design decisions:
@@ -53,6 +54,13 @@ Example tags: "complex-reasoning", "mathematical-problem-solving", "multi-step-c
 
 Assess THIS model's specific strengths and weaknesses for task routing. What does this model excel at compared to other LLMs? What does it handle poorly?`
 )
+
+func (c *Client) taggingMaxTokens() int {
+	if c.Config != nil && c.Config.TaggingMaxTokens > 0 {
+		return c.Config.TaggingMaxTokens
+	}
+	return defaultTagsMaxTokens
+}
 
 // GetModelTags asks a model to self-assess its capabilities and returns the result as
 // a JSON string of strengths and weaknesses.
@@ -160,14 +168,18 @@ func (c *Client) getTagsOpenAICompatible(model string, p config.ProviderConfig) 
 	// o1/o3/o4-series models do not support system messages or temperature.
 	if isReasoningModelNoSysMsg(model) {
 		payload = map[string]interface{}{
-			"model": model,
+			"model":      model,
+			"max_tokens": c.taggingMaxTokens(),
+			"stop":       []string{tagsStopSequence},
 			"messages": []map[string]string{
 				{"role": "user", "content": c.activeTaggingUserNoSysPrompt()},
 			},
 		}
 	} else {
 		payload = map[string]interface{}{
-			"model": model,
+			"model":      model,
+			"max_tokens": c.taggingMaxTokens(),
+			"stop":       []string{tagsStopSequence},
 			"messages": []map[string]string{
 				{"role": "system", "content": c.activeTaggingSystemPrompt()},
 				{"role": "user", "content": c.activeTaggingUserPrompt()},
@@ -269,14 +281,18 @@ func (c *Client) getTagsOpenAICompatibleNoTemp(model string, p config.ProviderCo
 	var payload map[string]interface{}
 	if isReasoningModelNoSysMsg(model) {
 		payload = map[string]interface{}{
-			"model": model,
+			"model":      model,
+			"max_tokens": c.taggingMaxTokens(),
+			"stop":       []string{tagsStopSequence},
 			"messages": []map[string]string{
 				{"role": "user", "content": c.activeTaggingUserNoSysPrompt()},
 			},
 		}
 	} else {
 		payload = map[string]interface{}{
-			"model": model,
+			"model":      model,
+			"max_tokens": c.taggingMaxTokens(),
+			"stop":       []string{tagsStopSequence},
 			"messages": []map[string]string{
 				{"role": "system", "content": c.activeTaggingSystemPrompt()},
 				{"role": "user", "content": c.activeTaggingUserPrompt()},
@@ -339,7 +355,9 @@ func (c *Client) getTagsOpenAICompatibleUserRoleOnly(model string, p config.Prov
 	runningWithMLX := isLocal && c.isLocalServerUsingMLX()
 
 	payload := map[string]interface{}{
-		"model": model,
+		"model":      model,
+		"max_tokens": c.taggingMaxTokens(),
+		"stop":       []string{tagsStopSequence},
 		"messages": []map[string]string{
 			{"role": "user", "content": c.activeTaggingUserNoSysPrompt()},
 		},
@@ -396,8 +414,8 @@ func (c *Client) getTagsOpenAICompatibleUserRoleOnly(model string, p config.Prov
 
 // getTagsOpenAIResponses fetches capability tags via the OpenAI Responses API.
 // It mirrors getTagsOpenAICompatible but sends the prompt in "input" and reads the
-// answer from "output". temperature and max_output_tokens are omitted so reasoning
-// models are not rejected and are free to allocate their own output budget.
+// answer from "output". The output budget is intentionally limited because capability
+// tags are short; benchmark and normal chat requests retain their independent budgets.
 func (c *Client) getTagsOpenAIResponses(model string, p config.ProviderConfig) (string, bool, bool, error) {
 	if isKnownNonChatModel(model) {
 		log.Printf("Model %s identified as non-chat model by name — deleting", model)
@@ -418,7 +436,7 @@ func (c *Client) getTagsOpenAIResponses(model string, p config.ProviderConfig) (
 		}
 	}
 
-	payload := buildResponsesPayload(model, messages, responsesRequestOptions{})
+	payload := buildResponsesPayload(model, messages, responsesRequestOptions{maxOutputTokens: c.taggingMaxTokens()})
 
 	log.Printf("Sending tags request to %s for model %s", url, model)
 	body, status, err := sendResponsesRequest(url, p.APIKey, payload, p.Timeout)
@@ -460,7 +478,7 @@ func (c *Client) getTagsAnthropic(model string, p config.ProviderConfig) (string
 
 	payload := map[string]interface{}{
 		"model":      model,
-		"max_tokens": tagsMaxTokens,
+		"max_tokens": c.taggingMaxTokens(),
 		"system":     c.activeTaggingSystemPrompt(),
 		"messages": []map[string]string{
 			{"role": "user", "content": c.activeTaggingUserPrompt()},
