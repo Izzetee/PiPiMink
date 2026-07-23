@@ -34,6 +34,16 @@ func TestExtractJSON(t *testing.T) {
 			expected: `{"strengths":["math","logic"],"weaknesses":["creativity"]}`,
 		},
 		{
+			name:     "JSON Before Leaked GLM Turn",
+			input:    "```json\n{\"strengths\":[\"code-generation\"],\"weaknesses\":[\"real-time-information\"]}\n```<|user|>thought: repeated analysis with {\"unrelated\":true}",
+			expected: `{"strengths":["code-generation"],"weaknesses":["real-time-information"]}`,
+		},
+		{
+			name:     "JSON With Braces In String",
+			input:    `answer: {"strengths":["structured-{data}-analysis"],"weaknesses":["none"]} trailing {"other":true}`,
+			expected: `{"strengths":["structured-{data}-analysis"],"weaknesses":["none"]}`,
+		},
+		{
 			name:     "Invalid JSON",
 			input:    "This is not JSON at all.",
 			expected: "{\"strengths\":[], \"weaknesses\":[]}",
