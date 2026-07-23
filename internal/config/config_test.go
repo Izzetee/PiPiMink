@@ -51,6 +51,7 @@ func TestLoadReadsConfiguredValues(t *testing.T) {
 	t.Setenv("DATABASE_MAX_CONNECTIONS", "11")
 	t.Setenv("DATABASE_MAX_IDLE_CONNECTIONS", "3")
 	t.Setenv("DATABASE_CONNECTION_MAX_LIFETIME", "45m")
+	t.Setenv("TAGGING_MAX_TOKENS", "1536")
 
 	cfg, err := Load()
 	assert.NoError(t, err)
@@ -74,6 +75,7 @@ func TestLoadReadsConfiguredValues(t *testing.T) {
 	assert.Equal(t, 11, cfg.DatabaseMaxConnections)
 	assert.Equal(t, 3, cfg.DatabaseMaxIdleConnections)
 	assert.Equal(t, 45*time.Minute, cfg.DatabaseConnectionMaxLifetime)
+	assert.Equal(t, 1536, cfg.TaggingMaxTokens)
 	// Providers are loaded from providers.json; without the file only the default OpenAI entry is present
 	assert.NotEmpty(t, cfg.Providers)
 }

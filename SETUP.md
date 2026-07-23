@@ -321,6 +321,12 @@ Scoring methods:
 | `BENCHMARK_SCHEDULE_ENABLED` | `false` | Run benchmarks automatically on a schedule |
 | `BENCHMARK_SCHEDULE_INTERVAL` | `24h` | Interval between scheduled benchmark runs |
 
+### Model capability tagging
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `TAGGING_MAX_TOKENS` | `1024` | Maximum output tokens for capability-tagging requests only. Does not affect benchmarks or normal chat responses. |
+
 ### Providers
 
 | Variable | Default | Description |
