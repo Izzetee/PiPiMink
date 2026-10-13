@@ -1,6 +1,6 @@
 module PiPiMink
 
-go 1.25.3
+go 1.26.0
 
 // Primary dependencies
 require (
@@ -43,7 +43,7 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.45.0
 	go.opentelemetry.io/otel/sdk v1.45.0
 	go.opentelemetry.io/otel/trace v1.45.0
-	golang.org/x/oauth2 v0.36.0
+	golang.org/x/oauth2 v0.37.0
 )
 
 require (
